@@ -1,0 +1,67 @@
+diff    res1:res2    ss1:ss2     dist_cb
+23      186F:163A      C:C        3.967
+21      186F:165W      C:C        7.772
+19      184S:165W      C:C        4.373
+16      181Q:165W      C:C        7.874
+15      180T:165W      C:C        4.273
+14      180T:166C      C:C        6.233
+14      181Q:167D      C:E        5.220
+13      179A:166C      C:C        7.488
+13      180T:167D      C:E        6.826
+12      178G:166C      E:C        5.540
+12      179A:167D      C:E        5.839
+11      159P:148L      C:C        3.893
+11      177I:166C      E:C        5.462
+11      178G:167D      E:E        4.018
+10      159P:149I      C:C        7.969
+10      177I:167D      E:E        6.838
+10      178G:168G      E:E        6.117
+9       159P:150A      C:C        4.367
+9       176Y:167D      C:E        7.424
+9       177I:168G      E:E        5.658
+8       158A:150A      C:C        6.673
+8       176Y:168G      C:E        5.067
+7       157S:150A      C:C        4.245
+7       175R:168G      C:E        7.888
+7       176Y:169S      C:C        6.768
+7       177I:170L      E:C        7.758
+6       157S:151P      C:C        6.990
+6       175R:169S      C:C        6.509
+
+Clusters of contacts
+Cluster # 1  (163-170;175-186)
+23      186F:163A      C6:C2        3.967
+21      186F:165W      C6:C2        7.772
+19      184S:165W      C6:C2        4.373
+16      181Q:165W      C6:C2        7.874
+15      180T:165W      C6:C2        4.273
+14      180T:166C      C6:C2        6.233
+14      181Q:167D      C6:E3        5.220
+13      179A:166C      C6:C2        7.488
+13      180T:167D      C6:E3        6.826
+12      178G:166C      E5:C2        5.540
+12      179A:167D      C6:E3        5.839
+11      177I:166C      E5:C2        5.462
+11      178G:167D      E5:E3        4.018
+10      177I:167D      E5:E3        6.838
+10      178G:168G      E5:E3        6.117
+9       176Y:167D      C4:E3        7.424
+9       177I:168G      E5:E3        5.658
+8       176Y:168G      C4:E3        5.067
+7       175R:168G      C4:E3        7.888
+7       176Y:169S      C4:C4        6.768
+7       177I:170L      E5:C4        7.758
+6       175R:169S      C4:C4        6.509
+
+Cluster # 2  (148-151;157-159)
+11      159P:148L      C2:C2        3.893
+10      159P:149I      C2:C2        7.969
+9       159P:150A      C2:C2        4.367
+8       158A:150A      C2:C2        6.673
+7       157S:150A      C2:C2        4.245
+6       157S:151P      C2:C2        6.990
+
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG_1_CCCCCCCCCCCCCCCCCCCCCCCCC_2_EE_3_CCCCCCCC_4_EE_5_CCCCCCCCCCCCCC_6_
+
+Statistics regarding residues involved in contacts
+ResNo  AA  SS(No)  NoConts:NoClust
