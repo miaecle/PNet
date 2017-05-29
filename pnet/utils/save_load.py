@@ -7,8 +7,8 @@ This is a temporary script file.
 
 import os
 import pandas as pd
-from pnet.dataset import SequenceDataset
-from pnet.dataset import merge_datasets
+from pnet.data import SequenceDataset
+from pnet.data import merge_datasets
 
 def load_sequence(path):
   df = pd.read_csv(path)
@@ -68,6 +68,20 @@ def load_sample(ID):
   CASP_all = load_CASP_all(raw=False)
   return CASP_all.select_by_ID(ID)
 
-def write_sample(dataset, path):
+def write_dataset(dataset, path):
   dataset.build_raw()
+  with open(path, 'w') as f:
+    num_samples = dataset.get_num_samples()
+    for i in range(num_samples):
+      f.writelines(dataset.raw[i])
+      f.writelines(['\n', '\n'])
+  return None
   
+def write_sequence(sequences, path):
+  if not sequences is list:
+    sequences = [sequences]
+  with open(path, 'w') as f:
+    num_samples = len(sequences)
+    for i in range(num_samples):
+      f.writelines(['>'+'TEMP'+str(i%10)+'\n', sequences[i] + '\n'])
+      f.writelines(['\n', '\n'])
