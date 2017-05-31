@@ -44,6 +44,9 @@ def psiblast_local(seq, database='nr', data_dir=None):
                                   db=os.path.join(data_dir, database), 
                                   out=os.path.join(save_dir, 'psiblast_results.xml'),
                                   evalue=0.001,
+                                  num_iterations=2,
+                                  out_pssm=os.path.join(save_dir, 'psiblast_results.pssm'),
+                                  save_each_pssm=True,
                                   outfmt=5)
   stdout, stderr = cline()
   with open(os.path.join(save_dir, 'psiblast_results.xml'), 'r') as f:
