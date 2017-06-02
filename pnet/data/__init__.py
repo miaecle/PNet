@@ -186,3 +186,35 @@ class SequenceDataset(object):
     pdb_paths = self.pdb_paths[index]
     raw = self.raw[index]
     return SequenceDataset(IDs, sequences, pdb_paths, raw)
+
+class MultipleSequenceAlignment(object):
+  """
+  class for MSA
+  """
+  def __init__(self, IDs, sequences, e=None, path=None):
+    """Hold information of master sequence(and ID), all hits above evalue"""
+    self._IDs = list(IDs)
+    self._sequences = list(sequences)
+    self.master_ID = self._IDs[0]
+    self.master_sequence = self._sequences[0]
+    self.n_alignments = len(self._IDs)
+    self.path = path
+    if e is None:
+      self._e = [0] * self.n_alignments
+    else:
+      self._e = list(e)
+
+  @property
+  def IDs(self):
+    """ Get IDs as np.array"""
+    return np.array(self._IDs)
+
+  @property
+  def sequences(self):
+    """ Get sequences as np.array"""
+    return np.array(self._sequences)
+
+  @property
+  def e(self):
+    """ Get sequences as np.array"""
+    return np.array(self._e)

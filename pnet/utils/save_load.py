@@ -7,7 +7,8 @@ This is a temporary script file.
 
 import os
 import pandas as pd
-from pnet.data import SequenceDataset
+import numpy as np
+from pnet.data import SequenceDataset, MultipleSequenceAlignment
 from pnet.data import merge_datasets
 
 def load_sequence(path):
@@ -56,7 +57,7 @@ def load_CASP(number, raw=False):
   else:
     path = os.path.join(path, 'casp' + str(int(number)) + '_seq.csv')
     return load_sequence(path)
-    
+
 def load_CASP_all(raw=False):
   CASP_series = [5, 6, 7, 8, 9, 10, 11, 12]
   datasets = [load_CASP(i, raw=raw) for i in CASP_series]
@@ -68,6 +69,32 @@ def load_sample(ID):
   CASP_all = load_CASP_all(raw=False)
   return CASP_all.select_by_ID(ID)
 
+def load_msa(path, hit_e):
+  with open(path, 'r') as f:
+    lines = f.readlines()
+  lines = [line.split() for line in lines]
+  lengths = map(len, lines)
+  start_pos = []
+  end_pos = []
+  start = False
+  for i, length in enumerate(lengths[1:]):
+    if length > 0 and start == False:
+      start_pos.append(i+1)
+      start = True
+    if length == 0 and start == True:
+      end_pos.append(i+1)
+      start = False
+  num_hits = np.unique(np.array(end_pos)-np.array(start_pos))
+  assert len(num_hits) == 1
+  num_blocks = len(start_pos)
+  sequences = ['']*num_hits[0]
+  IDs = list(np.array(lines[start_pos[0]:end_pos[0]])[:, 0])
+  for i in range(num_blocks):
+    seq_add = np.array(lines[start_pos[i]:end_pos[i]])[:, 1]
+    for j in range(len(seq_add)):
+      sequences[j] = sequences[j] + seq_add[j]
+  return MultipleSequenceAlignment(IDs, sequences, e=hit_e, path=path)
+
 def write_dataset(dataset, path):
   dataset.build_raw()
   with open(path, 'w') as f:
@@ -76,7 +103,7 @@ def write_dataset(dataset, path):
       f.writelines(dataset.raw[i])
       f.writelines(['\n', '\n'])
   return None
-  
+
 def write_sequence(sequences, path):
   if not sequences is list:
     sequences = [sequences]
