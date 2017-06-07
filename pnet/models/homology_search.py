@@ -32,8 +32,9 @@ def blastp_local(seq, database='nr', data_dir=None, evalue=0.001):
                                 max_target_seqs=1000,
                                 outfmt=10)
   stdout, stderr = cline()
-  df = pd.read_csv(os.path.join(save_dir, 'blastp_results.csv'), header=None)
-  hit_IDs, indices = np.unique(np.array(df[1].tolist()), return_index=True)
+  df = pd.read_csv(os.path.join(save_dir, 'psiblast_results.csv'), header=None)
+  hit_IDs = [hit_ID for hit_ID in df[1] if not pd.isnull(hit_ID)]
+  hit_IDs, indices = np.unique(hit_IDs, return_index=True)
   hit_e = np.array(df[10].tolist())[indices]
   with open(os.path.join(save_dir, 'hits.csv'), 'w') as f:
     for i in range(len(hit_IDs)):
@@ -47,7 +48,8 @@ def blastp_local(seq, database='nr', data_dir=None, evalue=0.001):
   with open(os.path.join(save_dir, 'temp.seq'), 'a') as f:
     f.writelines(hits_sequences)
   command = 'clustalw -infile=' + os.path.join(save_dir, 'temp.seq') + \
-            ' -outfile=' + os.path.join(save_dir, 'results.aln')
+            ' -outfile=' + os.path.join(save_dir, 'results.aln') + \
+            ' -OUTORDER=INPUT'
   flag = system_call(command)
   return os.path.join(save_dir, 'results.aln'), hit_e
 
@@ -67,7 +69,8 @@ def psiblast_local(dataset, database='nr', data_dir=None, evalue=0.001, num_iter
                                   outfmt=10)
   stdout, stderr = cline()
   df = pd.read_csv(os.path.join(save_dir, 'psiblast_results.csv'), header=None)
-  hit_IDs, indices = np.unique(np.array(df[1].tolist()), return_index=True)
+  hit_IDs = [hit_ID for hit_ID in df[1] if not pd.isnull(hit_ID)]
+  hit_IDs, indices = np.unique(hit_IDs, return_index=True)
   hit_e = np.array(df[10].tolist())[indices]
   with open(os.path.join(save_dir, 'hits.csv'), 'w') as f:
     for i in range(len(hit_IDs)):
@@ -81,10 +84,24 @@ def psiblast_local(dataset, database='nr', data_dir=None, evalue=0.001, num_iter
   with open(os.path.join(save_dir, 'temp.seq'), 'a') as f:
     f.writelines(hits_sequences)
   command = 'clustalw -infile=' + os.path.join(save_dir, 'temp.seq') + \
-            ' -outfile=' + os.path.join(save_dir, 'results.aln')
+            ' -outfile=' + os.path.join(save_dir, 'results.aln') + \
+            ' -OUTORDER=INPUT'
   flag = system_call(command)
   return os.path.join(save_dir, 'results.aln'), hit_e
 
-def hhblits_local(seq):
-
-  return None
+def hhblits_local(dataset, database='uniprot20_2016_02', data_dir=None,
+                  evalue=0.001, num_iterations=2, num_threads=4):
+  save_dir = tempfile.mkdtemp()
+  pnet.utils.write_dataset(dataset, os.path.join(save_dir, 'temp.seq'))
+  if data_dir is None:
+    data_dir = os.environ['HH_DATA_DIR']
+  command = 'hhblits -i ' + os.path.join(save_dir, 'temp.seq') + \
+            ' -d ' + os.path.join(data_dir, database) + \
+            ' -oa3m ' + os.path.join(save_dir, 'results.a3m') + \
+            ' - cpu ' + str(num_threads) + ' -n ' + str(num_iterations) + \
+            ' -e ' + str(evalue)
+  flag = system_call(command)
+  command = 'reformat.pl a3m clu ' + os.path.join(save_dir, 'results.a3m') + \
+            ' ' + os.path.join(save_dir, 'results.clu')
+  flag = system_call(command)
+  return os.path.join(save_dir, 'results.clu')

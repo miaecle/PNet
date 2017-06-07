@@ -11,7 +11,7 @@ import numpy as np
 import csv
 from pnet.data import SequenceDataset, MultipleSequenceAlignment
 from pnet.data import merge_datasets
-from pnet.models.homology_search import blastp_local, psiblast_local
+from pnet.models.homology_search import blastp_local, psiblast_local, hhblits_local
 
 def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2):
   """Generate multiple sequence alignment for a single sample(sequence)"""
@@ -21,22 +21,25 @@ def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2):
     path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
   elif mode == "blastp":
     path, e = blastp_local(dataset, evalue=evalue)
+  elif mode == "hhblits":
+    path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
+    e = None
   return load_msa_from_aln(path, e=e)
 
 def load_msa_from_aln(path, e=None):
   """ ClustalW .aln file loader """
   with open(path, 'r') as f:
-    lines = f.readlines()
-  lines = [line.split() for line in lines]
-  lengths = map(len, lines)
+    raw = f.readlines()
+  lines = [line.split() for line in raw]
+  #lengths = map(len, lines)
   start_pos = []
   end_pos = []
   start = False
-  for i, length in enumerate(lengths[1:]):
-    if length > 0 and start == False:
+  for i, line in enumerate(raw[1:]):
+    if line[0] != '\n' and line[0] != ' ' and start == False:
       start_pos.append(i+1)
       start = True
-    if length == 0 and start == True:
+    if (line[0] == '\n' or line[0] == ' ') and start == True:
       end_pos.append(i+1)
       start = False
   num_hits = np.unique(np.array(end_pos)-np.array(start_pos))
@@ -64,8 +67,8 @@ def load_msa(path):
 
 def write_msa(msa_dataset, path):
   """ Write msa(customized class) to file """
-  IDs = msa_dataset.IDs
-  sequences = msa_dataset.sequences
+  IDs = msa_dataset.hit_IDs
+  sequences = msa_dataset.hit_sequences
   e = msa_dataset.e
   n_hits = len(IDs)
   if max(e) > 0:
