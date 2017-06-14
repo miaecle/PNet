@@ -20,7 +20,7 @@ def system_call(command):
   p = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True)
   return p.stdout.read()
 
-def blastp_local(seq, database='nr', data_dir=None, evalue=0.001):
+def blastp_local(dataset, database='nr', data_dir=None, evalue=0.001):
   save_dir = tempfile.mkdtemp()
   pnet.utils.write_dataset(dataset, os.path.join(save_dir, 'temp.seq'))
   if data_dir is None:
