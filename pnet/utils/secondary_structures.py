@@ -10,8 +10,7 @@ import numpy as np
 import os
 import pandas as pd
 import pnet
-
-from pnet.models.homology_search import system_call
+from pnet.utils import system_call
 
 def string_to_onehot_ss(ss):
   state = {'C': [1, 0, 0], 'H': [0, 1, 0], 'E': [0, 0, 1]}
@@ -58,10 +57,11 @@ def read_ss(path, dataset):
       order[np.argmin(order)] = 12 - np.sum(order)
     current_line = current_line + 1
   assert sorted(order) == [3, 4, 5]
-  return np.array(np.stack([data[:, order[0]], 
-                            data[:, order[1]], 
+  order = np.array(order, dtype=int)
+  return np.array(np.stack([data[:, order[0]],
+                            data[:, order[1]],
                             data[:, order[2]]]), dtype=float)
-  
+
 def raptorx_ss(dataset):
   raptorx_dir = os.environ['RAPTORX_DIR']
   original_dir = os.getcwd()
@@ -74,7 +74,7 @@ def raptorx_ss(dataset):
   path = os.path.join(raptorx_dir, 'tmp/temp/temp.ss3')
   os.chdir(original_dir)
   return read_ss(path, dataset)
-  
+
 def psspred_ss(dataset):
   psspred_dir = os.environ['PSSPRED_DIR']
   original_dir = os.getcwd()
@@ -88,7 +88,7 @@ def psspred_ss(dataset):
   path = os.path.join(psspred_dir, 'temp/seq.dat.ss')
   os.chdir(original_dir)
   return read_ss(path, dataset)
-  
+
 def psipred_ss(dataset):
   psipred_dir = os.environ['PSIPRED_DIR']
   original_dir = os.getcwd()

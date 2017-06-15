@@ -14,7 +14,6 @@ import pnet
 import subprocess
 
 from Bio.Blast.Applications import NcbiblastpCommandline, NcbipsiblastCommandline
-from Bio.Blast import NCBIXML, NCBIWWW
 
 def system_call(command):
   p = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True)

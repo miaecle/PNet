@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun  5 13:40:00 2017
+Created on Wed Jun 14 15:15:59 2017
 
 @author: zqwu
 """
@@ -9,14 +9,16 @@ import os
 import pandas as pd
 import numpy as np
 import csv
-from pnet.data import SequenceDataset, MultipleSequenceAlignment
-from pnet.data import merge_datasets
-from pnet.models.homology_search import blastp_local, psiblast_local, hhblits_local
+from pnet.utils import blastp_local, psiblast_local, hhblits_local
 
-def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2):
+def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=False):
   """Generate multiple sequence alignment for a single sample(sequence)"""
   assert len(dataset.sequences) == 1, "Only support one sample"
   # Support psiblast, blastp
+  data_dir = os.environ['PNET_DATA_DIR']
+  msa_file = os.path.join(data_dir, 'MSA_All/'+dataset.IDs[0]+'.msa')
+  if os.path.exists(msa_file) and not reload:
+    return load_msa(msa_file)
   if mode == "psiblast":
     path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
   elif mode == "blastp":
@@ -83,3 +85,37 @@ def write_msa(msa_dataset, path):
       if write_e:
         out_line.append(e[i])
       writer.writerow(out_line)
+
+class MultipleSequenceAlignment(object):
+  """
+  class for MSA
+  """
+  def __init__(self, hit_IDs, hit_sequences, e=None, path=None):
+    """Hold information of master sequence(and ID), all hits above evalue"""
+    self._hit_IDs = list(hit_IDs)
+    self._hit_sequences = list(hit_sequences)
+    self.master_ID = self._hit_IDs[0]
+    self.master_sequence = self._hit_sequences[0]
+    # Number of alignments should exclude master sequence
+    self.n_alignments = len(self._hit_IDs) - 1
+    self.path = path
+    if e is None:
+      self._e = [0] * self.n_alignments
+    else:
+      self._e = list(e)
+      assert len(self._e) == self.n_alignments
+
+  @property
+  def hit_IDs(self):
+    """ Get IDs as np.array"""
+    return np.array(self._hit_IDs)
+
+  @property
+  def hit_sequences(self):
+    """ Get sequences as np.array"""
+    return np.array(self._hit_sequences)
+
+  @property
+  def e(self):
+    """ Get sequences as np.array"""
+    return np.array(self._e)

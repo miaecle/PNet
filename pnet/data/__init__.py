@@ -7,4 +7,3 @@ Created on Mon Jun  5 15:42:21 2017
 """
 
 from sequence_dataset import *
-from structure_dataset import *

@@ -5,3 +5,4 @@ from __future__ import unicode_literals
 import pnet.data
 import pnet.utils
 import pnet.models
+import pnet.feat

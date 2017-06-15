@@ -12,7 +12,7 @@ import numpy as np
 from pnet.data import SequenceDataset
 from pnet.data import merge_datasets
 
-def load_sequence(path):
+def load_sequence(path, load_pdb=False):
   """ Load sequence csv file """
   df = pd.read_csv(path)
   IDs = df['ID'].tolist()
@@ -20,9 +20,9 @@ def load_sequence(path):
   Seqs = df['sequence'].tolist()
   lengths = set([len(IDs), len(pdb_paths), len(Seqs)])
   assert len(lengths) == 1
-  return SequenceDataset(IDs, sequences=Seqs, pdb_paths=pdb_paths, raw=None)
+  return SequenceDataset(IDs, sequences=Seqs, pdb_paths=pdb_paths, raw=None, load_pdb=load_pdb, keep_all=False)
 
-def load_raw_sequence(path):
+def load_raw_sequence(path, load_pdb=False):
   """ Load raw fasta file """
   with open(path, 'r') as f:
     lines = f.readlines()
@@ -48,31 +48,31 @@ def load_raw_sequence(path):
     IDs.append(ID)
   if len(raw) > 0:
     raws.append(raw)
-  return SequenceDataset(IDs, sequences=None, pdb_paths=None, raw=raws)
+  return SequenceDataset(IDs, sequences=None, pdb_paths=None, raw=raws, load_pdb=load_pdb, keep_all=False)
 
-def load_CASP(number, raw=False):
+def load_CASP(number, raw=False, load_pdb=False):
   """ Load CASP set """
   datasets_path = os.environ['PNET_DATA_DIR']
   assert int(number) in range(5,13), 'CASP' + str(int(number)) + ' is not supported'
   path = os.path.join(datasets_path, 'CASP'+str(int(number)))
   if raw:
     path = os.path.join(path, 'casp' + str(int(number)) + '.seq')
-    return load_raw_sequence(path)
+    return load_raw_sequence(path, load_pdb=load_pdb)
   else:
     path = os.path.join(path, 'casp' + str(int(number)) + '_seq.csv')
-    return load_sequence(path)
+    return load_sequence(path, load_pdb=load_pdb)
 
-def load_CASP_all(raw=False):
+def load_CASP_all(raw=False, load_pdb=False):
   """ Load all prepared CASP samples (5~12) """
   CASP_series = [5, 6, 7, 8, 9, 10, 11, 12]
-  datasets = [load_CASP(i, raw=raw) for i in CASP_series]
+  datasets = [load_CASP(i, raw=raw, load_pdb=load_pdb) for i in CASP_series]
   return merge_datasets(datasets)
 
-def load_sample(ID):
+def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
   if not ID is list:
     ID = [ID]
-  CASP_all = load_CASP_all(raw=False)
+  CASP_all = load_CASP_all(raw=False, load_pdb=load_pdb)
   return CASP_all.select_by_ID(ID)
 
 def write_dataset(dataset, path):
