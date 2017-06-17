@@ -68,6 +68,16 @@ def load_CASP_all(raw=False, load_pdb=False):
   datasets = [load_CASP(i, raw=raw, load_pdb=load_pdb) for i in CASP_series]
   return merge_datasets(datasets)
 
+def load_PDB50(raw=False, load_pdb=False):
+  datasets_path = os.environ['PNET_DATA_DIR']
+  path = os.path.join(datasets_path, 'PDB50')
+  if raw:
+    path = os.path.join(path, 'pdb50.seq')
+    return load_raw_sequence(path, load_pdb=load_pdb)
+  else:
+    path = os.path.join(path, 'pdb50_seq.csv')
+    return load_sequence(path, load_pdb=load_pdb)
+
 def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
   if not ID is list:

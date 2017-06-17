@@ -13,6 +13,8 @@ import numpy as np
 import os
 import pandas as pd
 import mdtraj as md
+import Bio
+from Bio.PDB import PDBList
 
 def pad_batch(batch_size, dataset):
   """Pads batch to have size of batch_size
@@ -64,37 +66,80 @@ class SequenceDataset(object):
 
   def load_structures(self):
     data_dir = os.environ['PNET_DATA_DIR']
+    save_dir = os.path.join(data_dir, 'PDB')
     ts = []
     resseqs = []
-    for path in self._pdb_paths:
-      if path == 'nan' or pd.isnull(path) or path is None:
-        ts.append(None)
-        resseqs.append(None)
+    pdbl = PDBList()
+    for i, path in enumerate(self._pdb_paths):
+      if self._IDs[i][0] == "T":
+        if path == 'nan' or pd.isnull(path) or path is None:
+          ts.append(None)
+          resseqs.append(None)
+        else:
+          path = os.path.join(data_dir, path)
+          t = md.load_pdb(path)
+          resseq_pos = 1
+          if not self.keep_all:
+            atoms_to_keep = [a for a in t.topology.atoms if a.name == 'CB']
+            resseqs.append(np.array([a.residue.resSeq for a in atoms_to_keep])-resseq_pos)
+            index = [a.index for a in atoms_to_keep]
+            t.restrict_atoms(index)
+          else:
+            resseqs.append(np.array([a.residue.resSeq for a in t.topology.atoms])-resseq_pos)
+          ts.append(t)
       else:
-        path = os.path.join(data_dir, path)
-        t = md.load_pdb(path)
+        PDB_ID = self._IDs[i][:4]
+        chain_ID = ord(self._IDs[i][4]) - ord('A')
+        # fetch PDB from website
+        pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir, file_format='pdb')
+        t = md.load_pdb(pdbfile)
+        chain = t.topology.chain(chain_ID)
+        # Calibrate the starting position of chain
+        code_start = [chain.residue(j).code for j in range(10)]
+        resseq_start = [chain.residue(j).resSeq for j in range(10)]
+        resseq_pos = self.calibrate_resseq(self._sequences[i], code_start, resseq_start)
         if not self.keep_all:
-          atoms_to_keep = [a for a in t.topology.atoms if a.name == 'CB']
-          resseqs.append(np.array([a.residue.resSeq for a in atoms_to_keep])-1)
+          atoms_to_keep = [a for a in chain.atoms if a.name == 'CB']
+          resseqs.append(np.array([a.residue.resSeq for a in atoms_to_keep])-resseq_pos)
           index = [a.index for a in atoms_to_keep]
           t.restrict_atoms(index)
         else:
-          resseqs.append(np.array([a.residue.resSeq for a in t.topology.atoms])-1)
+          resseqs.append(np.array([a.residue.resSeq for a in chain.atoms])-resseq_pos)
+          index = [a.index for a in chain.atoms]
+          t.restrict_atoms(index)
         ts.append(t)
     self._structures = ts
     self._resseqs = resseqs
     self.extract_coordinates()
     self.load_pdb = True
 
+  @staticmethod
+  def calibrate_resseq(seq, code_start, resseq_start):
+    for i, res in enumerate(list(seq)):
+      if res == code_start[0]:
+        resseq_pos = resseq_start[0] - i
+        if list(np.array(list(seq))[np.array(resseq_start[1:])-resseq_pos]) \
+            == code_start[1:]:
+          return resseq_pos
+
+
   def extract_coordinates(self):
     self.xyz = []
+    error_file = './error.err'
     for i, structure in enumerate(self._structures):
       if structure is None:
         self.xyz.append(None)
       else:
-        coordinate = np.zeros((max(self._resseqs[i]) + 1,3))
-        coordinate[self._resseqs[i], :] = structure.xyz
-        self.xyz.append(coordinate)
+        try:
+          for j in range(len(self._resseqs[i])):
+            assert self._sequences[i][self._resseqs[i][j]] == self._structures[i].topology.residue(j).code
+          coordinate = np.zeros((len(self._sequences[i]),3))
+          coordinate[self._resseqs[i], :] = structure.xyz
+          self.xyz.append(coordinate)
+        except:
+          print(self._IDs[i])
+          with open(error_file, 'a') as f:
+            f.write(self._IDs[i] + '\n')
 
   def get_num_samples(self):
     return self.n_samples
