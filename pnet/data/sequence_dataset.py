@@ -125,21 +125,13 @@ class SequenceDataset(object):
 
   def extract_coordinates(self):
     self.xyz = []
-    error_file = './error.err'
     for i, structure in enumerate(self._structures):
       if structure is None:
         self.xyz.append(None)
       else:
-        try:
-          for j in range(len(self._resseqs[i])):
-            assert self._sequences[i][self._resseqs[i][j]] == self._structures[i].topology.residue(j).code
-          coordinate = np.zeros((len(self._sequences[i]),3))
-          coordinate[self._resseqs[i], :] = structure.xyz
-          self.xyz.append(coordinate)
-        except:
-          print(self._IDs[i])
-          with open(error_file, 'a') as f:
-            f.write(self._IDs[i] + '\n')
+        coordinate = np.zeros((len(self._sequences[i]),3))
+        coordinate[self._resseqs[i], :] = structure.xyz
+        self.xyz.append(coordinate)
 
   def get_num_samples(self):
     return self.n_samples
