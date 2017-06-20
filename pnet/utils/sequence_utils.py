@@ -80,7 +80,7 @@ def load_PDB50(raw=False, load_pdb=False):
 
 def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
-  if not ID is list:
+  if not ID.__class__ is list:
     ID = [ID]
   CASP_all = load_CASP_all(raw=False, load_pdb=False)
   PDB50 = load_PDB50(raw=False, load_pdb=False)
@@ -102,7 +102,7 @@ def write_dataset(dataset, path):
 
 def write_sequence(sequences, path):
   """ Generate and write temporary SequenceDataset to file(fasta)"""
-  if not sequences is list:
+  if not sequences.__class__ is list:
     sequences = [sequences]
   with open(path, 'w') as f:
     num_samples = len(sequences)

@@ -26,8 +26,11 @@ def generate_ss(dataset, mode="raptorx", reload=False):
     ss_score = psspred_ss(dataset)
   elif mode == "psipred":
     ss_score = psipred_ss(dataset)
-  n_columns = ss_score.shape[0]
+  else:
+    raise ValueError('method not supported')
+  n_columns = ss_score.shape[1]
   print('Number of features for secondary structure: %i' % n_columns)
+  write_ss(ss_score, ss_file)
   return ss_score
 
 def generate_sa(dataset, mode="raptorx", reload=False):
@@ -42,8 +45,11 @@ def generate_sa(dataset, mode="raptorx", reload=False):
     sa_score = raptorx_sa(dataset)
   elif mode == "netsurfp":
     sa_score = netsurfp_rsa(dataset)
-  n_columns = sa_score.shape[0]
+  else:
+    raise ValueError('method not supported')
+  n_columns = sa_score.shape[1]
   print('Number of features for solvent accessibility: %i' % n_columns)
+  write_sa(sa_score, sa_file)
   return sa_score
 
 def load_ss(path):

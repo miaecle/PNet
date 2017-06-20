@@ -10,8 +10,30 @@ import pandas as pd
 import numpy as np
 import csv
 from pnet.utils import blastp_local, psiblast_local, hhblits_local
+from pnet.utils.amino_acids import AminoAcid
 
 def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=False):
+  msa = form_msa(dataset, mode=mode,
+                 evalue=evalue,
+                 num_iterations=num_iterations,
+                 reload=reload)
+  sequences = [[AminoAcid[res] for res in msa._hit_sequences[i]] for i in range(len(msa._hit_sequences))]
+  index = [i for i, res in enumerate(msa.master_sequence) if res != '-']
+  sequences = np.transpose(np.array(sequences))[index, :]
+  def to_one_hot(res):
+    result = np.zeros((23))
+    if res > 0:
+      result[int(res)] = 1
+    return result
+  sequences_one_hot = [[to_one_hot(sequence[i]) for i in range(len(sequence))] for sequence in sequences]
+  pfm = np.sum(np.array(sequences_one_hot), axis=1)
+  for i, res_freq in enumerate(pfm):
+    total_count = np.sum(res_freq)
+    if total_count > 0:
+      pfm[i, :] = pfm[i, :]/total_count
+  return pfm
+
+def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=False):
   """Generate multiple sequence alignment for a single sample(sequence)"""
   assert len(dataset.sequences) == 1, "Only support one sample"
   # Support psiblast, blastp

@@ -227,7 +227,6 @@ class SequenceDataset(object):
           RR[invalid_index, :] = False
           RR[:, invalid_index] = False
         self.RRs.append(RR)
-    return self.RRs
 
   @property
   def IDs(self):
@@ -320,15 +319,33 @@ class SequenceDataset(object):
       if ID in IDs_selection:
         index.append(i)
     return self.select_by_index(index)
-    
+
   def fetch_features(self, feat='MSA'):
-    fetch_function = {'MSA': pnet.feat.generate_msa,
-        'SS': pnet.feat.generate_ss,
-        'SA': pnet.feat.generate_sa}
-    return [fetch_function[feat](self.select_by_index([i])) for i in range(self.n_samples)]
-    
-  def generate_X(self, feat_list):
-    if not feat_list is list:
+    if feat == 'MSA':
+      feat = pnet.feat.generate_msa
+    elif feat == 'SS':
+      feat = pnet.feat.generate_ss
+    elif feat == 'SA':
+      feat = pnet.feat.generate_sa
+    return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
+
+  def build_features(self, feat_list):
+    if not feat_list.__class__ is list:
       feat_list = [feat_list]
+    n_feats = len(feat_list)
     X = [self.fetch_features(feat=feature) for feature in feat_list]
-    return X
+    self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
+
+  def build_labels(self, task='RR'):
+    if task == 'RR':
+      self.build_residue_contact()
+      self.y = self.RRs
+      self.w = [np.ones_like(RR) for RR in self.RRs]
+      for i, weight_matrix in enumerate(self.w):
+        weight_matrix[:, self._resseqs[i]] = 0
+        weight_matrix[self._resseqs[i], :] = 0
+    else:
+      self.y = self.xyz
+      self.w = [1 for i in range(self.n_samples)]
+
+

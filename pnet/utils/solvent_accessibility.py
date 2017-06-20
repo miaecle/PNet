@@ -61,7 +61,7 @@ def read_sa(path, dataset):
   order = np.array(order, dtype=int)
   return np.array(np.stack([data[:, order[0]],
                             data[:, order[1]],
-                            data[:, order[2]]]), dtype=float)
+                            data[:, order[2]]], axis=1), dtype=float)
 
 def raptorx_sa(dataset):
   raptorx_dir = os.environ['RAPTORX_DIR']
