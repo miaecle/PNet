@@ -82,8 +82,13 @@ def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
   if not ID is list:
     ID = [ID]
-  CASP_all = load_CASP_all(raw=False, load_pdb=load_pdb)
-  return CASP_all.select_by_ID(ID)
+  CASP_all = load_CASP_all(raw=False, load_pdb=False)
+  PDB50 = load_PDB50(raw=False, load_pdb=False)
+  ALL = merge_datasets([CASP_all, PDB50])
+  selected = ALL.select_by_ID(ID)
+  if load_pdb:
+    selected.load_structures()
+  return selected
 
 def write_dataset(dataset, path):
   """ Write SequenceDataset to file(fasta)"""

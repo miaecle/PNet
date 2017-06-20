@@ -14,6 +14,7 @@ import os
 import pandas as pd
 import mdtraj as md
 import Bio
+import pnet
 from Bio.PDB import PDBList
 
 def pad_batch(batch_size, dataset):
@@ -91,7 +92,7 @@ class SequenceDataset(object):
         PDB_ID = self._IDs[i][:4]
         chain_ID = ord(self._IDs[i][4]) - ord('A')
         # fetch PDB from website
-        pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir, file_format='pdb')
+        pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir)
         t = md.load_pdb(pdbfile)
         chain = t.topology.chain(chain_ID)
         # Calibrate the starting position of chain
@@ -303,7 +304,13 @@ class SequenceDataset(object):
     sequences = self.sequences[index]
     pdb_paths = self.pdb_paths[index]
     raw = self.raw[index]
-    return SequenceDataset(IDs, sequences, pdb_paths, raw, self.load_pdb, self.keep_all)
+    result = SequenceDataset(IDs, sequences, pdb_paths, raw, load_pdb=False)
+    if self.load_pdb:
+      result._structures = [self._structures[i] for i in index]
+      result._resseqs = [self._resseqs[i] for i in index]
+      result.xyz = [self.xyz[i] for i in index]
+      result.load_pdb = True
+    return result
 
   def select_by_ID(self, IDs_selection):
     """Creates a new dataset from a selection of IDs.
@@ -313,3 +320,15 @@ class SequenceDataset(object):
       if ID in IDs_selection:
         index.append(i)
     return self.select_by_index(index)
+    
+  def fetch_features(self, feat='MSA'):
+    fetch_function = {'MSA': pnet.feat.generate_msa,
+        'SS': pnet.feat.generate_ss,
+        'SA': pnet.feat.generate_sa}
+    return [fetch_function[feat](self.select_by_index([i])) for i in range(self.n_samples)]
+    
+  def generate_X(self, feat_list):
+    if not feat_list is list:
+      feat_list = [feat_list]
+    X = [self.fetch_features(feat=feature) for feature in feat_list]
+    return X

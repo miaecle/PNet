@@ -9,6 +9,7 @@ Created on Wed Jun 14 16:33:55 2017
 import os
 import pandas as pd
 import numpy as np
+import pickle
 from pnet.utils import raptorx_ss, psipred_ss, psspred_ss, raptorx_sa, netsurfp_rsa
 
 def generate_ss(dataset, mode="raptorx", reload=False):
@@ -46,13 +47,21 @@ def generate_sa(dataset, mode="raptorx", reload=False):
   return sa_score
 
 def load_ss(path):
-  return
+  with open(path, 'r') as f:
+    ss = pickle.load(f)
+  return ss
 
 def load_sa(path):
+  with open(path, 'r') as f:
+    sa = pickle.load(f)
+  return sa
+
+def write_ss(ss_score, path):
+  with open(path, 'w') as f:
+    pickle.dump(ss_score, f)
   return
 
-def write_ss(ss_score):
-  return
-
-def write_sa(sa_score):
+def write_sa(sa_score, path):
+  with open(path, 'w') as f:
+    pickle.dump(sa_score, f)
   return
