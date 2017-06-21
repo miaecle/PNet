@@ -17,23 +17,6 @@ import Bio
 import pnet
 from Bio.PDB import PDBList
 
-def pad_batch(batch_size, dataset):
-  """Pads batch to have size of batch_size
-  """
-  num_samples = dataset.get_num_samples()
-  assert num_samples <= batch_size
-  if num_samples < batch_size:
-    dataset._IDs.extend([None] * (batch_size - num_samples))
-    dataset._sequences.extend([None] * (batch_size - num_samples))
-    dataset._pdb_paths.extend([None] * (batch_size - num_samples))
-    dataset._raw.extend([None] * (batch_size - num_samples))
-    if dataset.load_pdb:
-      dataset._structures.extend([None] * (batch_size - num_samples))
-      dataset._resseqs.extend([None] * (batch_size - num_samples))
-      dataset.xyz.extend([None] * (batch_size - num_samples))
-      dataset.RRs.extend([None] * (batch_size - num_samples))
-  return dataset
-
 def merge_datasets(datasets):
   dataset = datasets[0]
   for i in range(1, len(datasets)):
@@ -64,6 +47,8 @@ class SequenceDataset(object):
       self._raw = list(raw)
     if self.load_pdb:
       self.load_structures()
+    self.X_built = False
+    self.y_built = False
 
   def load_structures(self):
     data_dir = os.environ['PNET_DATA_DIR']
@@ -262,40 +247,6 @@ class SequenceDataset(object):
       self.load_structures()
     return np.array(self._resseqs)
 
-  def iterbatches(self,
-                  batch_size=None,
-                  deterministic=False,
-                  pad_batches=False):
-    """Object that iterates over minibatches from the dataset.
-    """
-    def iterate(dataset, batch_size, deterministic, pad_batches):
-      n_samples = dataset.get_num_samples()
-      if not deterministic:
-        sample_perm = np.random.permutation(n_samples)
-      else:
-        sample_perm = np.arange(n_samples)
-      if batch_size is None:
-        batch_size = n_samples
-      interval_points = np.linspace(
-          0, n_samples, np.ceil(float(n_samples) / batch_size) + 1, dtype=int)
-      for j in range(len(interval_points) - 1):
-        indices = range(interval_points[j], interval_points[j + 1])
-        perm_indices = sample_perm[indices]
-        out_dataset = dataset.select_by_index(perm_indices)
-        if pad_batches:
-          out_dataset = pad_batch(batch_size, out_dataset)
-        yield out_dataset
-    return iterate(self, batch_size, deterministic, pad_batches)
-
-  def itersamples(self):
-    """Object that iterates over the samples in the dataset.
-    """
-    def sample_iterate(dataset):
-      n_samples = dataset.get_num_samples()
-      for i in range(n_samples):
-        yield dataset.select_by_index(i)
-    return sample_iterate(self)
-
   def select_by_index(self, index):
     """Creates a new dataset from a selection of index.
     """
@@ -327,6 +278,8 @@ class SequenceDataset(object):
       feat = pnet.feat.generate_ss
     elif feat == 'SA':
       feat = pnet.feat.generate_sa
+    elif feat == 'raw':
+      feat = pnet.feat.generate_raw
     return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
 
   def build_features(self, feat_list):
@@ -335,6 +288,7 @@ class SequenceDataset(object):
     n_feats = len(feat_list)
     X = [self.fetch_features(feat=feature) for feature in feat_list]
     self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
+    self.X_built = True
 
   def build_labels(self, task='RR'):
     if task == 'RR':
@@ -347,5 +301,54 @@ class SequenceDataset(object):
     else:
       self.y = self.xyz
       self.w = [1 for i in range(self.n_samples)]
+    self.y_built = True
+    
+  def iterbatches(self,
+                  batch_size=None,
+                  deterministic=False,
+                  pad_batches=False):
+    """Object that iterates over minibatches from the dataset.
+    """
+    assert self.X_built, "Dataset not ready for training, features must be built"
+    assert self.y_built, "Dataset not ready for training, labels must be built"
+    def iterate(dataset, batch_size, deterministic, pad_batches):
+      n_samples = dataset.get_num_samples()
+      if not deterministic:
+        sample_perm = np.random.permutation(n_samples)
+      else:
+        sample_perm = np.arange(n_samples)
+      if batch_size is None:
+        batch_size = n_samples
+      interval_points = np.linspace(
+          0, n_samples, np.ceil(float(n_samples) / batch_size) + 1, dtype=int)
+      for j in range(len(interval_points) - 1):
+        indices = range(interval_points[j], interval_points[j + 1])
+        perm_indices = sample_perm[indices]
+        out_X = [self.X[i] for i in perm_indices]
+        out_y = [self.y[i] for i in perm_indices]
+        out_w = [self.w[i] for i in perm_indices]
+        if pad_batches:
+          out_X, out_y, out_w = self.pad_batch(batch_size, out_X, out_y, out_w)
+        yield out_X, out_y, out_w
+    return iterate(self, batch_size, deterministic, pad_batches)
 
-
+  @staticmethod
+  def pad_batch(batch_size, X, y, w):
+    """Pads batch to have size of batch_size
+    """
+    num_samples = len(X)
+    assert num_samples <= batch_size
+    if num_samples < batch_size:
+      X.extend([None] * (batch_size - num_samples))
+      y.extend([None] * (batch_size - num_samples))
+      w.extend([None] * (batch_size - num_samples))
+    return X, y, w
+  
+  def itersamples(self):
+    """Object that iterates over the samples in the dataset.
+    """
+    def sample_iterate(dataset):
+      n_samples = dataset.get_num_samples()
+      for i in range(n_samples):
+        yield self.X[i], self.y[i], self.w[i]
+    return sample_iterate(self)
