@@ -13,10 +13,10 @@ import pnet
 from pnet.utils import system_call
 
 def string_to_onehot_ss(ss):
-  state = {'C': [1, 0, 0], 'H': [0, 1, 0], 'E': [0, 0, 1]}
+  state = {'C': [1, 0, 0], 'E': [0, 1, 0], 'H': [0, 0, 1]}
   return np.array([state[a] for a in ss])
 
-def read_ss(path, dataset):
+def read_ss(path, dataset, order=None):
   with open(path, 'r') as f:
     lines = f.readlines()
   lines = [line.split() for line in lines]
@@ -29,33 +29,34 @@ def read_ss(path, dataset):
   data = np.array(lines[start:start+length])
   seq = ''.join(list(data[:,1]))
   assert str(seq) == str(dataset.sequences[0])
-  coil_defined = 1
-  sheet_defined = 1
-  helix_defined = 1
-  current_line = 0
-  order = np.zeros(3)
-  while coil_defined + sheet_defined + helix_defined > 1:
-    if data[current_line, 2] == 'C' and coil_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[0] = a + 3
-        coil_defined = 0
-    elif data[current_line, 2] == 'E' and sheet_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[1] = a + 3
-        sheet_defined = 0
-    elif data[current_line, 2] == 'H' and helix_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[2] = a + 3
-        helix_defined = 0
-    if coil_defined + sheet_defined + helix_defined == 1:
-      order[np.argmin(order)] = 12 - np.sum(order)
-    current_line = current_line + 1
+  if order is None:
+    coil_defined = 1
+    sheet_defined = 1
+    helix_defined = 1
+    current_line = 0
+    order = np.zeros(3)
+    while coil_defined + sheet_defined + helix_defined > 1:
+      if data[current_line, 2] == 'C' and coil_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[0] = a + 3
+          coil_defined = 0
+      elif data[current_line, 2] == 'E' and sheet_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[1] = a + 3
+          sheet_defined = 0
+      elif data[current_line, 2] == 'H' and helix_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[2] = a + 3
+          helix_defined = 0
+      if coil_defined + sheet_defined + helix_defined == 1:
+        order[np.argmin(order)] = 12 - np.sum(order)
+      current_line = current_line + 1
   assert sorted(order) == [3, 4, 5]
   order = np.array(order, dtype=int)
   return np.array(np.stack([data[:, order[0]],
@@ -73,7 +74,7 @@ def raptorx_ss(dataset):
   system_call(command)
   path = os.path.join(raptorx_dir, 'tmp/temp/temp.ss3')
   os.chdir(original_dir)
-  return read_ss(path, dataset)
+  return read_ss(path, dataset, order=[5, 4, 3])
 
 def psspred_ss(dataset):
   psspred_dir = os.environ['PSSPRED_DIR']
@@ -87,7 +88,7 @@ def psspred_ss(dataset):
   system_call(command)
   path = os.path.join(psspred_dir, 'temp/seq.dat.ss')
   os.chdir(original_dir)
-  return read_ss(path, dataset)
+  return read_ss(path, dataset, order=[3, 5, 4])
 
 def psipred_ss(dataset):
   psipred_dir = os.environ['PSIPRED_DIR']
@@ -101,4 +102,4 @@ def psipred_ss(dataset):
   system_call(command)
   path = os.path.join(psipred_dir, 'temp/temp.ss2')
   os.chdir(original_dir)
-  return read_ss(path, dataset)
+  return read_ss(path, dataset, order=[3, 5, 4])

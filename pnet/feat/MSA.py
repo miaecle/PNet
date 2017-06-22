@@ -16,9 +16,8 @@ def generate_raw(dataset):
   assert len(dataset.sequences) == 1
   sequences = [AminoAcid[res] for res in dataset.sequences[0]]
   return np.reshape(np.array(sequences), (len(sequences), 1))
-  
-  
-def generate_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=False):
+
+def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=False):
   msa = form_msa(dataset, mode=mode,
                  evalue=evalue,
                  num_iterations=num_iterations,

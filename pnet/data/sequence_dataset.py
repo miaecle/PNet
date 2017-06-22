@@ -290,9 +290,9 @@ class SequenceDataset(object):
     self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
     self.X_built = True
 
-  def build_labels(self, task='RR'):
+  def build_labels(self, task='RR', binary=True, threshold=0.8):
     if task == 'RR':
-      self.build_residue_contact()
+      self.build_residue_contact(binary=binary, threshold=threshold)
       self.y = self.RRs
       self.w = [np.ones_like(RR) for RR in self.RRs]
       for i, weight_matrix in enumerate(self.w):
@@ -302,7 +302,7 @@ class SequenceDataset(object):
       self.y = self.xyz
       self.w = [1 for i in range(self.n_samples)]
     self.y_built = True
-    
+
   def iterbatches(self,
                   batch_size=None,
                   deterministic=False,
@@ -343,7 +343,7 @@ class SequenceDataset(object):
       y.extend([None] * (batch_size - num_samples))
       w.extend([None] * (batch_size - num_samples))
     return X, y, w
-  
+
   def itersamples(self):
     """Object that iterates over the samples in the dataset.
     """
