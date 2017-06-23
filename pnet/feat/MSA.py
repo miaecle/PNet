@@ -103,7 +103,7 @@ def write_msa(msa_dataset, path):
   sequences = msa_dataset.hit_sequences
   e = msa_dataset.e
   n_hits = len(IDs)
-  if max(e) > 0:
+  if len(e)>0 and max(e) > 0:
     write_e = True
     e = np.insert(e, 0, 0)
   else:
