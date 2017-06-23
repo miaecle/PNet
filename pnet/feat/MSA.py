@@ -17,7 +17,7 @@ def generate_raw(dataset):
   sequences = [AminoAcid[res] for res in dataset.sequences[0]]
   return np.reshape(np.array(sequences), (len(sequences), 1))
 
-def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=False):
+def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=True):
   msa = form_msa(dataset, mode=mode,
                  evalue=evalue,
                  num_iterations=num_iterations,
@@ -38,13 +38,13 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload
       pfm[i, :] = pfm[i, :]/total_count
   return pfm
 
-def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=False):
+def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=True):
   """Generate multiple sequence alignment for a single sample(sequence)"""
   assert len(dataset.sequences) == 1, "Only support one sample"
   # Support psiblast, blastp
   data_dir = os.environ['PNET_DATA_DIR']
   msa_file = os.path.join(data_dir, 'MSA_All/'+dataset.IDs[0]+'.msa')
-  if os.path.exists(msa_file) and not reload:
+  if os.path.exists(msa_file) and reload:
     return load_msa(msa_file)
   if mode == "psiblast":
     path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
@@ -53,6 +53,9 @@ def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=Fa
   elif mode == "hhblits":
     path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
     e = None
+  msa = load_msa_from_aln(path, e=e)
+  if reload:
+    write_msa(msa, msa_file)
   return load_msa_from_aln(path, e=e)
 
 def load_msa_from_aln(path, e=None):
