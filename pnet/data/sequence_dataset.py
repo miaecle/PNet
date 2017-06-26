@@ -50,55 +50,87 @@ class SequenceDataset(object):
     self.X_built = False
     self.y_built = False
 
-  def load_structures(self):
+  def load_structures(self, binary=False, threshold=0.8):
+    """load pdb structures for samples"""
     data_dir = os.environ['PNET_DATA_DIR']
     save_dir = os.path.join(data_dir, 'PDB')
     ts = []
     resseqs = []
+    xyz = []
+    RRs = []
+    RR_weights = []
     pdbl = PDBList()
     for i, path in enumerate(self._pdb_paths):
-      if self._IDs[i][0] == "T":
-        if path == 'nan' or pd.isnull(path) or path is None:
-          ts.append(None)
-          resseqs.append(None)
-        else:
-          path = os.path.join(data_dir, path)
-          t = md.load_pdb(path)
-          resseq_pos = 1
-          if not self.keep_all:
-            atoms_to_keep = [a for a in t.topology.atoms if a.name == 'CB']
-            resseqs.append(np.array([a.residue.resSeq for a in atoms_to_keep])-resseq_pos)
-            index = [a.index for a in atoms_to_keep]
-            t.restrict_atoms(index)
-          else:
-            resseqs.append(np.array([a.residue.resSeq for a in t.topology.atoms])-resseq_pos)
-          ts.append(t)
+      if path == 'nan' or pd.isnull(path) or path is None:
+        ts.append(None)
+        resseqs.append(None)
+        xyz.append(None)
+        RRs.append(None)
+        RR_weights.append(None)
       else:
-        PDB_ID = self._IDs[i][:4]
-        chain_ID = ord(self._IDs[i][4]) - ord('A')
-        # fetch PDB from website
-        pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir)
-        t = md.load_pdb(pdbfile)
-        chain = t.topology.chain(chain_ID)
+        if self._IDs[i][0] == "T":
+          path = os.path.join(data_dir, path)
+          # Load pdb
+          t = md.load_pdb(path)
+          # CASP samples all have only one chain
+          chain = t.topology.chain(0)
+        else:
+          PDB_ID = self._IDs[i][:4]
+          chain_ID = ord(self._IDs[i][4]) - ord('A')
+          # fetch PDB from website
+          pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir)
+          t = md.load_pdb(pdbfile)
+          chain = t.topology.chain(chain_ID)
+        
         # Calibrate the starting position of chain
         code_start = [chain.residue(j).code for j in range(10)]
         resseq_start = [chain.residue(j).resSeq for j in range(10)]
         resseq_pos = self.calibrate_resseq(self._sequences[i], code_start, resseq_start)
         if not self.keep_all:
+          # Only use beta-C to calculate residue-residue contact
           atoms_to_keep = [a for a in chain.atoms if a.name == 'CB']
-          resseqs.append(np.array([a.residue.resSeq for a in atoms_to_keep])-resseq_pos)
+          # Residue position in the sequence
+          resseq = np.array([a.residue.resSeq for a in atoms_to_keep]) - resseq_pos
           index = [a.index for a in atoms_to_keep]
           t.restrict_atoms(index)
         else:
-          resseqs.append(np.array([a.residue.resSeq for a in chain.atoms])-resseq_pos)
+          resseq = np.array([a.residue.resSeq for a in chain.atoms]) - resseq_pos
           index = [a.index for a in chain.atoms]
           t.restrict_atoms(index)
+        
+        n_residues = len(self._sequences[i])
+        # 3D-coordinates
+        coordinate = np.zeros((n_residues,3))
+        coordinate[resseq, :] = t.xyz
+  
+        RR = np.zeros((n_residues, n_residues, 3))
+        RR_weight = np.ones((n_residues, n_residues))
+        RR[:,:,:] = coordinate
+        # Pairwise distance calculation
+        RR = np.sqrt(np.sum(np.square(RR - np.transpose(RR, (1, 0, 2))), axis=2))
+        invalid_index = np.delete(np.arange(n_residues), resseq)
+        RR[invalid_index, :] = 0
+        RR[:, invalid_index] = 0
+        RR_weight[invalid_index, :] = 0
+        RR_weight[:, invalid_index] = 0
+        if binary:
+          # All contact within threshold will be set as True
+          RR = np.asarray(-RR + threshold > 0, dtype=bool)
+          RR[invalid_index, :] = False
+          RR[:, invalid_index] = False
+  
         ts.append(t)
+        resseqs.append(resseq)
+        xyz.append(coordinate)
+        RRs.append(RR)
+        RR_weights.append(RR_weight)
     self._structures = ts
     self._resseqs = resseqs
-    self.extract_coordinates()
+    self.xyz = xyz
+    self.RRs = RRs
+    self.RR_weights = RR_weights
     self.load_pdb = True
-
+        
   @staticmethod
   def calibrate_resseq(seq, code_start, resseq_start):
     for i, res in enumerate(list(seq)):
@@ -108,16 +140,6 @@ class SequenceDataset(object):
             == code_start[1:]:
           return resseq_pos
 
-
-  def extract_coordinates(self):
-    self.xyz = []
-    for i, structure in enumerate(self._structures):
-      if structure is None:
-        self.xyz.append(None)
-      else:
-        coordinate = np.zeros((len(self._sequences[i]),3))
-        coordinate[self._resseqs[i], :] = structure.xyz
-        self.xyz.append(coordinate)
 
   def get_num_samples(self):
     return self.n_samples
@@ -145,9 +167,13 @@ class SequenceDataset(object):
       structures_add = list(np.array(extension_dataset.structures)[add_on])
       resseqs_add = list(np.array(extension_dataset.resseqs)[add_on])
       xyz_add = list(np.array(extension_dataset.xyz)[add_on])
+      RRs_add = list(np.array(extension_dataset.RRs)[add_on])
+      RR_weights_add = list(np.array(extension_dataset.RR_weights)[add_on])
       self._structures.extend(structures_add)
       self._resseqs.extend(resseqs_add)
       self.xyz.extend(xyz_add)
+      self.RRs.append(RRs_add)
+      self.RR_weights.append(RR_weights_add)
     self.n_samples = self.n_samples + len(add_on)
 
 
@@ -190,28 +216,6 @@ class SequenceDataset(object):
         self._raw[i] = []
         self._raw[i].append('>' + self._IDs[i] + '\n')
         self._raw[i].append(self._sequences[i] + '\n')
-
-  def build_residue_contact(self, binary=False, threshold=0.8):
-    """ Build residue-residue contact map based on 3D coordinates"""
-    if not self.load_pdb:
-      self.load_structures()
-    self.RRs = []
-    for i, coordinate in enumerate(self.xyz):
-      if coordinate is None:
-        self.RRs.append(None)
-      else:
-        num_residues = coordinate.shape[0]
-        RR = np.zeros((num_residues, num_residues, 3))
-        RR[:,:,:] = coordinate
-        RR = np.sqrt(np.sum(np.square(RR - np.transpose(RR, (1, 0, 2))), axis=2))
-        invalid_index = np.delete(np.arange(num_residues), self._resseqs[i])
-        RR[invalid_index, :] = 0
-        RR[:, invalid_index] = 0
-        if binary:
-          RR = np.asarray(-RR + threshold > 0, dtype=bool)
-          RR[invalid_index, :] = False
-          RR[:, invalid_index] = False
-        self.RRs.append(RR)
 
   @property
   def IDs(self):
@@ -259,6 +263,8 @@ class SequenceDataset(object):
       result._structures = [self._structures[i] for i in index]
       result._resseqs = [self._resseqs[i] for i in index]
       result.xyz = [self.xyz[i] for i in index]
+      result.RRs = [self.RRs[i] for i in index]
+      result.RR_weights = [self.RR_weights[i] for i in index]
       result.load_pdb = True
     return result
 
@@ -291,13 +297,11 @@ class SequenceDataset(object):
     self.X_built = True
 
   def build_labels(self, task='RR', binary=True, threshold=0.8):
+    if not self.load_pdb:
+      self.load_structures(binary=binary, threshold=threshold)
     if task == 'RR':
-      self.build_residue_contact(binary=binary, threshold=threshold)
       self.y = self.RRs
-      self.w = [np.ones_like(RR) for RR in self.RRs]
-      for i, weight_matrix in enumerate(self.w):
-        weight_matrix[:, self._resseqs[i]] = 0
-        weight_matrix[self._resseqs[i], :] = 0
+      self.w = self.RR_weights
     else:
       self.y = self.xyz
       self.w = [1 for i in range(self.n_samples)]
