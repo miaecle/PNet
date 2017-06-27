@@ -60,13 +60,17 @@ class SequenceDataset(object):
     RRs = []
     RR_weights = []
     pdbl = PDBList()
+    
     for i, path in enumerate(self._pdb_paths):
+      n_residues = len(self._sequences[i])
       if path == 'nan' or pd.isnull(path) or path is None:
         ts.append(None)
         resseqs.append(None)
         xyz.append(None)
-        RRs.append(None)
-        RR_weights.append(None)
+        RR = np.zeros((n_residues, n_residues))
+        RRs.append(RR)
+        RR_weight = np.zeros((n_residues, n_residues))
+        RR_weights.append(RR_weight)
       else:
         if self._IDs[i][0] == "T":
           path = os.path.join(data_dir, path)
@@ -86,6 +90,8 @@ class SequenceDataset(object):
         code_start = [chain.residue(j).code for j in range(10)]
         resseq_start = [chain.residue(j).resSeq for j in range(10)]
         resseq_pos = self.calibrate_resseq(self._sequences[i], code_start, resseq_start)
+        # resseq_pos should always be non-negative
+        assert isinstance(resseq_pos, int), "Conflict in sequences"
         if not self.keep_all:
           # Only use beta-C to calculate residue-residue contact
           atoms_to_keep = [a for a in chain.atoms if a.name == 'CB']
@@ -98,7 +104,6 @@ class SequenceDataset(object):
           index = [a.index for a in chain.atoms]
           t.restrict_atoms(index)
         
-        n_residues = len(self._sequences[i])
         # 3D-coordinates
         coordinate = np.zeros((n_residues,3))
         coordinate[resseq, :] = t.xyz
@@ -258,7 +263,10 @@ class SequenceDataset(object):
     sequences = self.sequences[index]
     pdb_paths = self.pdb_paths[index]
     raw = self.raw[index]
-    result = SequenceDataset(IDs, sequences, pdb_paths, raw, load_pdb=False)
+    if isinstance(index, int):
+      result = SequenceDataset([IDs], [sequences], [pdb_paths], [raw], load_pdb=False)
+    else:
+      result = SequenceDataset(IDs, sequences, pdb_paths, raw, load_pdb=False)
     if self.load_pdb:
       result._structures = [self._structures[i] for i in index]
       result._resseqs = [self._resseqs[i] for i in index]
