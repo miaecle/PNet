@@ -17,7 +17,7 @@ def string_to_onehot_sa(sa):
   state = {'B': [1, 0, 0], 'M': [0, 1, 0], 'E': [0, 0, 1]}
   return np.array([state[a] for a in sa])
 
-def read_sa(path, dataset):
+def read_sa(path, dataset, order=None):
   with open(path, 'r') as f:
     lines = f.readlines()
   lines = [line.split() for line in lines]
@@ -30,33 +30,34 @@ def read_sa(path, dataset):
   data = np.array(lines[start:start+length])
   seq = ''.join(list(data[:,1]))
   assert str(seq) == str(dataset.sequences[0])
-  bury_defined = 1
-  medium_defined = 1
-  exposed_defined = 1
-  current_line = 0
-  order = np.zeros(3)
-  while bury_defined + medium_defined + exposed_defined > 1:
-    if data[current_line, 2] == 'B' and bury_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[0] = a + 3
-        bury_defined = 0
-    elif data[current_line, 2] == 'M' and medium_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[1] = a + 3
-        medium_defined = 0
-    elif data[current_line, 2] == 'E' and exposed_defined > 0:
-      values = np.array(data[current_line, 3:6])
-      a = np.argmax(values)
-      if values[a-1] < values[a] and values[a-2] < values[a]:
-        order[2] = a + 3
-        exposed_defined = 0
-    if bury_defined + medium_defined + exposed_defined == 1:
-      order[np.argmin(order)] = 12 - np.sum(order)
-    current_line = current_line + 1
+  if order is None:
+    bury_defined = 1
+    medium_defined = 1
+    exposed_defined = 1
+    current_line = 0
+    order = np.zeros(3)
+    while bury_defined + medium_defined + exposed_defined > 1:
+      if data[current_line, 2] == 'B' and bury_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[0] = a + 3
+          bury_defined = 0
+      elif data[current_line, 2] == 'M' and medium_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[1] = a + 3
+          medium_defined = 0
+      elif data[current_line, 2] == 'E' and exposed_defined > 0:
+        values = np.array(data[current_line, 3:6])
+        a = np.argmax(values)
+        if values[a-1] < values[a] and values[a-2] < values[a]:
+          order[2] = a + 3
+          exposed_defined = 0
+      if bury_defined + medium_defined + exposed_defined == 1:
+        order[np.argmin(order)] = 12 - np.sum(order)
+      current_line = current_line + 1
   assert sorted(order) == [3, 4, 5]
   order = np.array(order, dtype=int)
   return np.array(np.stack([data[:, order[0]],
@@ -74,7 +75,7 @@ def raptorx_sa(dataset):
   system_call(command)
   path = os.path.join(raptorx_dir, 'tmp/temp/temp.acc')
   os.chdir(original_dir)
-  return read_sa(path, dataset)
+  return read_sa(path, dataset, order=[3, 4, 5])
 
 def netsurfp_rsa(dataset):
   netsurfp_dir = os.environ['NETSURFP_DIR']

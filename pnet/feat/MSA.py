@@ -15,7 +15,13 @@ from pnet.utils.amino_acids import AminoAcid
 def generate_raw(dataset):
   assert len(dataset.sequences) == 1
   sequences = [AminoAcid[res] for res in dataset.sequences[0]]
-  return np.reshape(np.array(sequences), (len(sequences), 1))
+  return np.reshape(to_one_hot(np.array(sequences), n_classes=23), (len(sequences), 23))
+
+def to_one_hot(y, n_classes=23):
+  n_samples = np.shape(y)[0]
+  y_hot = np.zeros((n_samples, n_classes))
+  y_hot[np.arange(n_samples), y.astype(np.int64)] = 1
+  return y_hot
 
 def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=True):
   msa = form_msa(dataset, mode=mode,
