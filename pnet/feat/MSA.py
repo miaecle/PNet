@@ -28,7 +28,7 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload
                  evalue=evalue,
                  num_iterations=num_iterations,
                  reload=reload)
-  sequences = [[AminoAcid[res] for res in msa._hit_sequences[i]] for i in range(len(msa._hit_sequences))]
+  sequences = [[AminoAcid[res.upper()] for res in msa._hit_sequences[i]] for i in range(len(msa._hit_sequences))]
   index = [i for i, res in enumerate(msa.master_sequence) if res != '-']
   sequences = np.transpose(np.array(sequences))[index, :]
   def to_one_hot(res):
