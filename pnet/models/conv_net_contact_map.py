@@ -66,7 +66,7 @@ class ConvNetContactMap(TensorGraph):
     self.res_features = Feature(shape=(None, self.max_n_res, self.n_res_feat))
     self.res_flag_1D = Feature(shape=(None, self.max_n_res), dtype=tf.int32)
     self.res_flag_2D = Feature(shape=(None, self.max_n_res, self.max_n_res), dtype=tf.int32)
-    self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
+    #self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
     self.conv_1D_layers = []
     self.batch_norm_layers = []
     n_input = self.n_res_feat
@@ -142,13 +142,13 @@ class ConvNetContactMap(TensorGraph):
           labels = []
           for ids, label in enumerate(y_b):
             labels.append(label.flatten())
-          feed_dict[self.labels] = to_one_hot(np.concatenate(labels, axis=0))
+          feed_dict[self.contact_labels] = to_one_hot(np.concatenate(labels, axis=0))
 
         if not w_b is None and not predict:
           weights = []
           for ids, weight in enumerate(w_b):
             weights.append(weight.flatten())
-          feed_dict[self.weights] = np.concatenate(labels, axis=0)
+          feed_dict[self.contact_weights] = np.concatenate(labels, axis=0)
 
         res_features = []
         res_flag_1D = []
@@ -167,5 +167,5 @@ class ConvNetContactMap(TensorGraph):
         feed_dict[self.res_features] = np.stack(res_features, axis=0)
         feed_dict[self.res_flag_1D] = np.stack(res_flag_1D, axis=0)
         feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
-        feed_dict[self.n_residues] = np.array(n_residues)
+        #feed_dict[self.n_residues] = np.array(n_residues)
         yield feed_dict

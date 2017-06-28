@@ -71,7 +71,10 @@ class SequenceDataset(object):
         resseqs.append(None)
         xyz.append(None)
         RR = np.zeros((n_residues, n_residues))
-        RRs.append(RR)
+        if binary:
+          RRs.append(np.array(RR, dtype=bool))
+        else:
+          RRs.append(RR)
         RR_weight = np.zeros((n_residues, n_residues))
         RR_weights.append(RR_weight)
       else:
@@ -339,29 +342,32 @@ class SequenceDataset(object):
         sample_perm = np.arange(n_samples)
       if batch_size is None:
         batch_size = n_samples
-      interval_points = np.linspace(
-          0, n_samples, np.ceil(float(n_samples) / batch_size) + 1, dtype=int)
+      interval_points = np.arange(np.ceil(float(n_samples) / batch_size) + 1) * batch_size
+      interval_points[-1] = n_samples
       for j in range(len(interval_points) - 1):
-        indices = range(interval_points[j], interval_points[j + 1])
+        indices = range(int(interval_points[j]), int(interval_points[j + 1]))
         perm_indices = sample_perm[indices]
-        out_X = [self.X[i] for i in perm_indices]
-        out_y = [self.y[i] for i in perm_indices]
-        out_w = [self.w[i] for i in perm_indices]
+        out_X = [dataset.X[i] for i in perm_indices]
+        out_y = [dataset.y[i] for i in perm_indices]
+        out_w = [dataset.w[i] for i in perm_indices]
         if pad_batches:
-          out_X, out_y, out_w = self.pad_batch(batch_size, out_X, out_y, out_w)
+          out_X, out_y, out_w = dataset.pad_batch(batch_size, out_X, out_y, out_w, dataset.n_features)
         yield out_X, out_y, out_w
     return iterate(self, batch_size, deterministic, pad_batches)
 
   @staticmethod
-  def pad_batch(batch_size, X, y, w):
+  def pad_batch(batch_size, X, y, w, n_features):
     """Pads batch to have size of batch_size
     """
     num_samples = len(X)
     assert num_samples <= batch_size
     if num_samples < batch_size:
-      X.extend([None] * (batch_size - num_samples))
-      y.extend([None] * (batch_size - num_samples))
-      w.extend([None] * (batch_size - num_samples))
+      X.extend([np.zeros((2, n_features))] * (batch_size - num_samples))
+      if isinstance(y[0][0, 0], bool):
+        y.extend([np.array(np.zeros((2, 2)), dtype=bool)] * (batch_size - num_samples))
+      else:
+        y.extend([np.zeros((2, 2))] * (batch_size - num_samples))
+      w.extend([np.zeros((2, 2))] * (batch_size - num_samples))
     return X, y, w
 
   def itersamples(self):
