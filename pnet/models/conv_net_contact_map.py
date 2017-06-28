@@ -11,7 +11,7 @@ import tensorflow as tf
 from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, Weights, Feature
-from pnet.models.layers import Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather
+from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather
 
 def to_one_hot(y, n_classes=2):
   """Transforms label vector into one-hot encoding.
@@ -39,6 +39,8 @@ class ConvNetContactMap(TensorGraph):
   def __init__(self,
                n_res_feat,
                batch_size,
+               embedding=True,
+               embedding_length=50,
                filter_size_1D=[51, 25, 11],
                n_filter_1D=[50, 50, 50],
                filter_size_2D=[25, 25, 25],
@@ -47,6 +49,8 @@ class ConvNetContactMap(TensorGraph):
                **kwargs):
     self.n_res_feat = n_res_feat
     self.batch_size = batch_size
+    self.embedding = embedding
+    self.embedding_length = embedding_length
     self.filter_size_1D = filter_size_1D
     self.n_filter_1D = n_filter_1D
     assert len(n_filter_1D) == len(filter_size_1D)
@@ -67,7 +71,15 @@ class ConvNetContactMap(TensorGraph):
     self.batch_norm_layers = []
     n_input = self.n_res_feat
     in_layer = self.res_features
-    for i, layer_1D in self.n_filter_1D:
+    if self.embedding:
+      self.residues_embedding = ResidueEmbedding(
+          pos_start=0,
+          pos_end=23,
+          embedding_length=self.embedding_length,
+          in_layers=[in_layer])
+      n_input = n_input - 23 + self.embedding_length
+      in_layer = self.residues_embedding
+    for i, layer_1D in enumerate(self.n_filter_1D):
       n_output = layer_1D
       self.conv_1D_layers.append(Conv1DLayer(
           n_input_feat=n_input,
@@ -87,7 +99,7 @@ class ConvNetContactMap(TensorGraph):
     in_layer = self.outer
 
     self.conv_2D_layers = []
-    for i, layer_2D in self.n_filter_2D:
+    for i, layer_2D in enumerate(self.n_filter_2D):
       n_output = layer_2D
       self.conv_2D_layers.append(Conv2DLayer(
           n_input_feat=n_input,
@@ -106,11 +118,11 @@ class ConvNetContactMap(TensorGraph):
     softmax = SoftMax(in_layers=[self.gather_layer])
     self.add_output(softmax)
 
-    self.labels = Label(shape=(None, 2))
-    self.weights = Weights(shape=(None,))
-    cost = SoftMaxCrossEntropy(in_layers=[self.labels, self.gather_layer])
-    loss = WeightedError(in_layers=[cost, self.weights])
-    self.set_loss(loss)
+    self.contact_labels = Label(shape=(None, 2))
+    self.contact_weights = Weights(shape=(None,))
+    cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_layer])
+    all_loss = WeightedError(in_layers=[cost, self.contact_weights])
+    self.set_loss(all_loss)
     return
 
   def default_generator(self,
@@ -126,13 +138,13 @@ class ConvNetContactMap(TensorGraph):
           pad_batches=pad_batches):
 
         feed_dict = dict()
-        if y_b is not None and not predict:
+        if not y_b is None and not predict:
           labels = []
           for ids, label in enumerate(y_b):
             labels.append(label.flatten())
           feed_dict[self.labels] = to_one_hot(np.concatenate(labels, axis=0))
 
-        if w_b is not None and not predict:
+        if not w_b is None and not predict:
           weights = []
           for ids, weight in enumerate(w_b):
             weights.append(weight.flatten())

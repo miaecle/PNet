@@ -18,6 +18,63 @@ from deepchem.nn import model_ops
 from deepchem.models.tensorgraph.layers import Layer
 from deepchem.models.tensorgraph.layers import convert_to_layers
 
+class ResidueEmbedding(Layer):
+
+  def __init__(self,
+               pos_start=0,
+               pos_end=23,
+               embedding_length=50,
+               init='glorot_uniform',
+               activation='relu',
+               dropout=None,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    pos_start: int, optional
+      starting position of raw features that need embedding
+    pos_end: int, optional
+      ending position
+    embedding_length: int, optional
+      length for embedding
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    dropout: float, optional
+      Dropout probability, not supported here
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.pos_start = pos_start
+    self.pos_end = pos_end
+    self.embedding_length = embedding_length
+    super(ResidueEmbedding, self).__init__(**kwargs)
+
+  def build(self):
+    """ Construct internal trainable weights.
+    """
+
+    self.embedding = self.init([self.pos_end - self.pos_start, self.embedding_length])
+    self.trainable_weights = [self.embedding]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+    input_features = in_layers[0].out_tensor
+    embedded_features = tf.tensordot(input_features[:, :, self.pos_start:self.pos_end], self.embedding, [[2], [0]])
+    out_tensor = tf.concat([embedded_features, input_features[:, :, self.pos_end:]], axis=2)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+
 class Conv1DLayer(Layer):
 
   def __init__(self,
@@ -72,10 +129,10 @@ class Conv1DLayer(Layer):
 
     self.build()
 
-    input_features = in_layers[0]
+    input_features = in_layers[0].out_tensor
     out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
     if len(in_layers) > 1:
-      flag = tf.expand_dims(in_layers[1], axis=2)
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
       out_tensor = out_tensor * tf.to_float(flag)
     if self.residue:
       out_tensor = out_tensor + tf.pad(input_features, [[0, 0], [0, 0],
@@ -141,10 +198,10 @@ class Conv2DLayer(Layer):
 
     self.build()
 
-    input_features = in_layers[0]
-    out_tensor = tf.nn.conv2d(input_features, self.W, strides=[1, 1], padding='SAME')
+    input_features = in_layers[0].out_tensor
+    out_tensor = tf.nn.conv2d(input_features, self.W, strides=[1, 1, 1, 1], padding='SAME')
     if len(in_layers) > 1:
-      flag = tf.expand_dims(in_layers[1], axis=3)
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
     if self.residue:
       out_tensor = out_tensor + tf.pad(input_features, [[0, 0], [0, 0], [0, 0]
@@ -175,13 +232,16 @@ class Outer1DTo2DLayer(Layer):
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
     self.build()
-    input_features = in_layers[0]
+    input_features = in_layers[0].out_tensor
     out_tensor = [tf.stack([input_features]*self.max_n_res, axis=1),
                   tf.stack([input_features]*self.max_n_res, axis=2)]
     out_tensor = tf.concat(out_tensor, axis=3)
     if len(in_layers) > 1:
-      flag = tf.expand_dims(in_layers[1], axis=3)
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
     return out_tensor
 
 class ContactMapGather(Layer):
@@ -210,10 +270,13 @@ class ContactMapGather(Layer):
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
     self.build()
-    input_features = in_layers[0]
+    input_features = in_layers[0].out_tensor
     input_features = tf.reshape(input_features, shape=[-1, self.n_input_feat])
     if len(in_layers) > 1:
-      flag = tf.cast(tf.reshape(in_layers[1], [-1]), dtype=tf.bool)
+      flag = tf.cast(tf.reshape(in_layers[1].out_tensor, [-1]), dtype=tf.bool)
       out_tensor = tf.boolean_mask(input_features, flag)
-    out_tensor = tf.nn.xw_plus_b(out_tensor. self.W, self.b)
+    out_tensor = tf.nn.xw_plus_b(out_tensor, self.W, self.b)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
     return out_tensor

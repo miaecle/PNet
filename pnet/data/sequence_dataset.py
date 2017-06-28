@@ -25,7 +25,7 @@ def merge_datasets(datasets):
 
 class SequenceDataset(object):
   """
-  Dataset class for protein sequences
+  Dataset class for protein sequences and structures
   """
   def __init__(self, IDs, sequences=None, pdb_paths=None, raw=None, load_pdb=False, keep_all=False):
     """Hold information of IDs, sequences, path of pdb files and raw inputs"""
@@ -51,7 +51,10 @@ class SequenceDataset(object):
     self.y_built = False
 
   def load_structures(self, binary=False, threshold=0.8):
-    """load pdb structures for samples"""
+    """
+    load pdb structures for samples
+    generate 3D coordinates and residue-residue contact map
+    """
     data_dir = os.environ['PNET_DATA_DIR']
     save_dir = os.path.join(data_dir, 'PDB')
     ts = []
@@ -60,7 +63,7 @@ class SequenceDataset(object):
     RRs = []
     RR_weights = []
     pdbl = PDBList()
-    
+
     for i, path in enumerate(self._pdb_paths):
       n_residues = len(self._sequences[i])
       if path == 'nan' or pd.isnull(path) or path is None:
@@ -85,7 +88,7 @@ class SequenceDataset(object):
           pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir)
           t = md.load_pdb(pdbfile)
           chain = t.topology.chain(chain_ID)
-        
+
         # Calibrate the starting position of chain
         code_start = [chain.residue(j).code for j in range(10)]
         resseq_start = [chain.residue(j).resSeq for j in range(10)]
@@ -103,11 +106,11 @@ class SequenceDataset(object):
           resseq = np.array([a.residue.resSeq for a in chain.atoms]) - resseq_pos
           index = [a.index for a in chain.atoms]
           t.restrict_atoms(index)
-        
+
         # 3D-coordinates
         coordinate = np.zeros((n_residues,3))
         coordinate[resseq, :] = t.xyz
-  
+
         RR = np.zeros((n_residues, n_residues, 3))
         RR_weight = np.ones((n_residues, n_residues))
         RR[:,:,:] = coordinate
@@ -123,7 +126,7 @@ class SequenceDataset(object):
           RR = np.asarray(-RR + threshold > 0, dtype=bool)
           RR[invalid_index, :] = False
           RR[:, invalid_index] = False
-  
+
         ts.append(t)
         resseqs.append(resseq)
         xyz.append(coordinate)
@@ -135,16 +138,16 @@ class SequenceDataset(object):
     self.RRs = RRs
     self.RR_weights = RR_weights
     self.load_pdb = True
-        
+
   @staticmethod
   def calibrate_resseq(seq, code_start, resseq_start):
+    """find the difference in index between sequence and pdb file"""
     for i, res in enumerate(list(seq)):
       if res == code_start[0]:
         resseq_pos = resseq_start[0] - i
         if list(np.array(list(seq))[np.array(resseq_start[1:])-resseq_pos]) \
             == code_start[1:]:
           return resseq_pos
-
 
   def get_num_samples(self):
     return self.n_samples
@@ -303,6 +306,11 @@ class SequenceDataset(object):
     X = [self.fetch_features(feat=feature) for feature in feat_list]
     self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
     self.X_built = True
+
+  @property
+  def n_features(self):
+    assert self.X_built, "X not built"
+    return self.X[0].shape[1]
 
   def build_labels(self, task='RR', binary=True, threshold=0.8):
     if not self.load_pdb:
