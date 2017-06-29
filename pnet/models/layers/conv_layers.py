@@ -81,7 +81,6 @@ class Conv1DLayer(Layer):
                n_input_feat,
                n_output_feat,
                n_size,
-               residue=False,
                init='glorot_uniform',
                activation='relu',
                dropout=None,
@@ -95,8 +94,6 @@ class Conv1DLayer(Layer):
       Number of output channels
     n_size: int
       Number of filter size(full length)
-    residue: bool, optional
-      If set the layer as a residue network layer
     init: str, optional
       Weight initialization for filters.
     activation: str, optional
@@ -110,7 +107,6 @@ class Conv1DLayer(Layer):
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
-    self.residue = residue
     super(Conv1DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -118,7 +114,8 @@ class Conv1DLayer(Layer):
     """
 
     self.W = self.init([self.n_size, self.n_input_feat, self.n_output_feat])
-    self.trainable_weights = [self.W]
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: input_features, input_flag
@@ -131,12 +128,10 @@ class Conv1DLayer(Layer):
 
     input_features = in_layers[0].out_tensor
     out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
       out_tensor = out_tensor * tf.to_float(flag)
-    if self.residue:
-      out_tensor = out_tensor + tf.pad(input_features, [[0, 0], [0, 0],
-                                                        [0, self.n_output_feat-self.n_input_feat]], "CONSTANT")
     out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
@@ -150,7 +145,6 @@ class Conv2DLayer(Layer):
                n_input_feat,
                n_output_feat,
                n_size,
-               residue=False,
                init='glorot_uniform',
                activation='relu',
                dropout=None,
@@ -164,8 +158,6 @@ class Conv2DLayer(Layer):
       Number of output channels
     n_size: int
       Number of filter size(full length)
-    residue: bool, optional
-      If set the layer as a residue network layer
     init: str, optional
       Weight initialization for filters.
     activation: str, optional
@@ -179,7 +171,6 @@ class Conv2DLayer(Layer):
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
-    self.residue = residue
     super(Conv2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -187,7 +178,8 @@ class Conv2DLayer(Layer):
     """
 
     self.W = self.init([self.n_size, self.n_size, self.n_input_feat, self.n_output_feat])
-    self.trainable_weights = [self.W]
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: input_features, input_flag
@@ -200,12 +192,10 @@ class Conv2DLayer(Layer):
 
     input_features = in_layers[0].out_tensor
     out_tensor = tf.nn.conv2d(input_features, self.W, strides=[1, 1, 1, 1], padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
-    if self.residue:
-      out_tensor = out_tensor + tf.pad(input_features, [[0, 0], [0, 0], [0, 0]
-                                                        [0, self.n_output_feat-self.n_input_feat]], "CONSTANT")
     out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
@@ -215,9 +205,15 @@ class Conv2DLayer(Layer):
 class Outer1DTo2DLayer(Layer):
 
   def __init__(self,
+               batch_size,
                max_n_res=1000,
+               pad_length=25,
+               n_features=50,
                **kwargs):
     self.max_n_res = max_n_res
+    self.pad_length = pad_length
+    self.batch_size = batch_size
+    self.n_features = n_features
     super(Outer1DTo2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -227,15 +223,36 @@ class Outer1DTo2DLayer(Layer):
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: input_features, input_flag_2D
+    This layer concats 1D sequences into 2D sequences
     """
     if in_layers is None:
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
     self.build()
+    max_n_res = self.max_n_res
+    pad_length = self.pad_length
+    n_features = self.n_features
+    batch_size = self.batch_size
+
     input_features = in_layers[0].out_tensor
-    out_tensor = [tf.stack([input_features]*self.max_n_res, axis=1),
-                  tf.stack([input_features]*self.max_n_res, axis=2)]
+    n_residues = in_layers[2].out_tensor + pad_length
+
+    pad_remains = max_n_res - n_residues
+    features_separated = tf.split(input_features, n_residues, axis=1)
+    features_padded = [tf.pad(features_separated[i],
+                              [[0,0],[0,pad_remains[i]],[0,0]],
+                              mode='CONSTANT') for i in range(batch_size)]
+    features_padded = [tf.reshape(
+        tf.expand_dims(tf.tile(features_padded[i],
+                               [1, n_residues[i], 1]), axis=0),
+        shape=[1, -1, max_n_res, n_features]) for i in range(batch_size)]
+
+    tensor1 = tf.stack([input_features]*max_n_res, axis=2)
+    tensor2 = tf.concat(features_padded, axis=1)
+
+    out_tensor = [tensor1, tensor2]
     out_tensor = tf.concat(out_tensor, axis=3)
+
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)

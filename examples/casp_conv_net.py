@@ -15,18 +15,22 @@ train = CASP_all.select_by_index([i for i in range(int(0.8*n_samples))])
 valid = CASP_all.select_by_index([i for i in range(int(0.8*n_samples), int(0.9*n_samples))])
 test = CASP_all.select_by_index([i for i in range(int(0.9*n_samples), n_samples)])
 
-for dataset in [train, valid, test]:
+for dataset in [valid]:
   dataset.build_features(['raw', 'MSA', 'SS', 'SA'])
   dataset.build_labels()
 
 batch_size = 2
-n_features = train.n_features
+n_features = valid.n_features
 
 model = pnet.models.ConvNetContactMap(
     n_res_feat=n_features,
-    batch_size=batch_size,
+    filter_size_1D=[51],
+    n_filter_1D=[50],
+    filter_size_2D=[25],
+    n_filter_2D=[50],
     learning_rate=1e-3,
+    batch_size=batch_size,
     use_queue=False,
     mode='classification')
 
-model.fit(train)
+model.fit(valid)

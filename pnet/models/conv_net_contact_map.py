@@ -38,7 +38,6 @@ def from_one_hot(y, axis=1):
 class ConvNetContactMap(TensorGraph):
   def __init__(self,
                n_res_feat,
-               batch_size,
                embedding=True,
                embedding_length=50,
                filter_size_1D=[51, 25, 11],
@@ -48,7 +47,6 @@ class ConvNetContactMap(TensorGraph):
                max_n_res=1000,
                **kwargs):
     self.n_res_feat = n_res_feat
-    self.batch_size = batch_size
     self.embedding = embedding
     self.embedding_length = embedding_length
     self.filter_size_1D = filter_size_1D
@@ -63,10 +61,10 @@ class ConvNetContactMap(TensorGraph):
     self.build_graph()
 
   def build_graph(self):
-    self.res_features = Feature(shape=(None, self.max_n_res, self.n_res_feat))
-    self.res_flag_1D = Feature(shape=(None, self.max_n_res), dtype=tf.int32)
-    self.res_flag_2D = Feature(shape=(None, self.max_n_res, self.max_n_res), dtype=tf.int32)
-    #self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
+    self.res_features = Feature(shape=(1, None, self.n_res_feat))
+    self.res_flag_1D = Feature(shape=(1, None), dtype=tf.int32)
+    self.res_flag_2D = Feature(shape=(1, None, self.max_n_res), dtype=tf.int32)
+    self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
     self.conv_1D_layers = []
     self.batch_norm_layers = []
     n_input = self.n_res_feat
@@ -85,7 +83,6 @@ class ConvNetContactMap(TensorGraph):
           n_input_feat=n_input,
           n_output_feat=n_output,
           n_size=self.filter_size_1D[i],
-          padding_length=self.padding_length,
           in_layers=[in_layer, self.res_flag_1D]))
       n_input = n_output
       in_layer = self.conv_1D_layers[-1]
@@ -93,8 +90,11 @@ class ConvNetContactMap(TensorGraph):
       in_layer = self.batch_norm_layers[-1]
 
     self.outer = Outer1DTo2DLayer(
-        max_n_res = self.max_n_res,
-        in_layers=[in_layer, self.res_flag_2D])
+        self.batch_size,
+        max_n_res=self.max_n_res,
+        pad_length=self.padding_length,
+        n_features=n_input,
+        in_layers=[in_layer, self.res_flag_2D, self.n_residues])
     n_input = n_input*2
     in_layer = self.outer
 
@@ -150,6 +150,8 @@ class ConvNetContactMap(TensorGraph):
             weights.append(weight.flatten())
           feed_dict[self.contact_weights] = np.concatenate(labels, axis=0)
 
+        padding_length = self.padding_length
+        max_n_res = self.max_n_res
         res_features = []
         res_flag_1D = []
         res_flag_2D = []
@@ -157,15 +159,16 @@ class ConvNetContactMap(TensorGraph):
         for ids, seq_feat in enumerate(X_b):
           n_res, n_features = seq_feat.shape
           assert n_features == self.n_res_feat
-          flag_1D = [1]*n_res + [0]*(self.max_n_res-n_res)
-          flag_2D = [flag_1D]*n_res + [[0]*self.max_n_res]*(self.max_n_res-n_res)
+          flag_1D = [1]*n_res + [0]*padding_length
+          flag_2D = np.stack([flag_1D]*n_res + [[0]*(n_res+padding_length)]*(max_n_res-n_res), axis=1)
           n_residues.append(n_res)
           res_flag_1D.append(np.array(flag_1D))
           res_flag_2D.append(np.array(flag_2D))
-          res_features.append(np.pad(seq_feat, ((0, self.max_n_res - n_res), (0, 0)), 'constant'))
+          res_features.append(np.pad(seq_feat, ((0, padding_length), (0, 0)), 'constant'))
 
-        feed_dict[self.res_features] = np.stack(res_features, axis=0)
-        feed_dict[self.res_flag_1D] = np.stack(res_flag_1D, axis=0)
-        feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
-        #feed_dict[self.n_residues] = np.array(n_residues)
+        feed_dict[self.res_features] = np.expand_dims(np.concatenate(res_features, axis=0), 0)
+        feed_dict[self.res_flag_1D] = np.expand_dims(np.concatenate(res_flag_1D, axis=0), 0)
+        feed_dict[self.res_flag_2D] = np.expand_dims(np.concatenate(res_flag_2D, axis=0), 0)
+        feed_dict[self.n_residues] = np.array(n_residues)
+        print(len(n_residues))
         yield feed_dict
