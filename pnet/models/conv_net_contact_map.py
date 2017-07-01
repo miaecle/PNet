@@ -38,7 +38,6 @@ def from_one_hot(y, axis=1):
 class ConvNetContactMap(TensorGraph):
   def __init__(self,
                n_res_feat,
-               batch_size,
                embedding=True,
                embedding_length=50,
                filter_size_1D=[51, 25, 11],
@@ -48,7 +47,6 @@ class ConvNetContactMap(TensorGraph):
                max_n_res=1000,
                **kwargs):
     self.n_res_feat = n_res_feat
-    self.batch_size = batch_size
     self.embedding = embedding
     self.embedding_length = embedding_length
     self.filter_size_1D = filter_size_1D
@@ -168,4 +166,27 @@ class ConvNetContactMap(TensorGraph):
         feed_dict[self.res_flag_1D] = np.stack(res_flag_1D, axis=0)
         feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
         #feed_dict[self.n_residues] = np.array(n_residues)
+        print('batch of %i' % len(n_residues))
         yield feed_dict
+
+  def evaluate(self, dataset, metrics):
+    """
+    Evaluates the performance of this model on specified dataset.
+
+    Parameters
+    ----------
+    dataset: dc.data.Dataset
+      Dataset object.
+    metric: deepchem.metrics.Metric
+      Evaluation metric
+    """
+    w = np.concatenate([w_sample.flatten() for w_sample in dataset.w])
+    y_pred = self.predict_proba(dataset)
+    y_pred = y_pred[np.nonzero(w)]
+    y = np.concatenate([y_sample.flatten() for y_sample in dataset.y])*1
+    y = y[np.nonzero(w)]
+    assert y_pred.shape[0] == y.shape[0]
+    results = {}
+    for metric in metrics:
+      results[metric.name] = metric.compute_metric(y, y_pred, w)
+    return results
