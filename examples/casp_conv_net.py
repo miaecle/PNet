@@ -5,7 +5,8 @@ Created on Tue Jun 27 19:43:49 2017
 
 @author: zqwu
 """
-
+import deepchem as dc
+import numpy as np
 import pnet
 
 CASP_all = pnet.utils.load_CASP_all()
@@ -19,8 +20,11 @@ for dataset in [valid]:
   dataset.build_features(['raw', 'MSA', 'SS', 'SA'])
   dataset.build_labels()
 
-batch_size = 2
-n_features = valid.n_features
+
+batch_size = 8
+n_features = train.n_features
+metrics = [dc.metrics.Metric(dc.metrics.accuracy_score, np.mean, mode="classification")]
+
 
 model = pnet.models.ConvNetContactMap(
     n_res_feat=n_features,
@@ -33,4 +37,11 @@ model = pnet.models.ConvNetContactMap(
     use_queue=False,
     mode='classification')
 
-model.fit(valid)
+
+model.fit(train)
+
+train_scores = model.evaluate(train, metrics)
+print(train_scores)
+
+valid_scores = model.evaluate(valid, metrics)
+print(valid_scores)

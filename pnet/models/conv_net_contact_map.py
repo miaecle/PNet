@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jun 20 21:28:44 2017
-
 @author: zqwu
 """
 
@@ -15,9 +14,7 @@ from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, Outer
 
 def to_one_hot(y, n_classes=2):
   """Transforms label vector into one-hot encoding.
-
   Turns y into vector of shape [n_samples, 2] (assuming binary labels).
-
   y: np.ndarray
     A vector of shape [n_samples, 1]
   """
@@ -29,7 +26,6 @@ def to_one_hot(y, n_classes=2):
 
 def from_one_hot(y, axis=1):
   """Transorms label vector from one-hot encoding.
-
   y: np.ndarray
     A vector of shape [n_samples, num_classes]
   """
@@ -46,6 +42,27 @@ class ConvNetContactMap(TensorGraph):
                n_filter_2D=[50, 50, 50],
                max_n_res=1000,
                **kwargs):
+    """
+    Parameters:
+    -----------
+    n_res_feat: int
+      number of features for each residue
+    embedding: bool, optional
+      whether to transfer the first 23 features(one hot encoding of residue 
+      type) to variable embedding
+    embedding_length: int, optional
+      length of embedding
+    filter_size_1D: list, optional
+      structure of 1D convolution: size of convolution
+    n_filter_1D: list, optional
+      structure of 1D convolution: depths of convolution
+    filter_size_2D: list, optional
+      structure of 2D convolution: size of convolution
+    n_filter_2D: list, optional
+      structure of 2D convolution: depths of convolution
+    max_n_res: int, optional
+      maximum number of residues, used for padding
+    """
     self.n_res_feat = n_res_feat
     self.embedding = embedding
     self.embedding_length = embedding_length
@@ -61,15 +78,17 @@ class ConvNetContactMap(TensorGraph):
     self.build_graph()
 
   def build_graph(self):
-    self.res_features = Feature(shape=(1, None, self.n_res_feat))
-    self.res_flag_1D = Feature(shape=(1, None), dtype=tf.int32)
-    self.res_flag_2D = Feature(shape=(1, None, self.max_n_res), dtype=tf.int32)
-    self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
-    self.conv_1D_layers = []
-    self.batch_norm_layers = []
+    """ Build graph structure """
+    self.res_features = Feature(shape=(None, self.max_n_res, self.n_res_feat))
+    # Placeholder for valid index
+    self.res_flag_1D = Feature(shape=(None, self.max_n_res), dtype=tf.int32)
+    self.res_flag_2D = Feature(shape=(None, self.max_n_res, self.max_n_res), dtype=tf.int32)
+    #self.n_residues = Feature(shape=(self.batch_size), dtype=tf.int32)
+
     n_input = self.n_res_feat
     in_layer = self.res_features
     if self.embedding:
+      # Add embedding layer
       self.residues_embedding = ResidueEmbedding(
           pos_start=0,
           pos_end=23,
@@ -77,27 +96,30 @@ class ConvNetContactMap(TensorGraph):
           in_layers=[in_layer])
       n_input = n_input - 23 + self.embedding_length
       in_layer = self.residues_embedding
+    # Add 1D convolutional layers and batch normalization layers
+    self.conv_1D_layers = []
+    self.batch_norm_layers = []
     for i, layer_1D in enumerate(self.n_filter_1D):
       n_output = layer_1D
       self.conv_1D_layers.append(Conv1DLayer(
           n_input_feat=n_input,
           n_output_feat=n_output,
           n_size=self.filter_size_1D[i],
+          padding_length=self.padding_length,
           in_layers=[in_layer, self.res_flag_1D]))
       n_input = n_output
       in_layer = self.conv_1D_layers[-1]
       self.batch_norm_layers.append(BatchNorm(in_layers=[in_layer]))
       in_layer = self.batch_norm_layers[-1]
-
+    
+    # Add transform layer from 1D sequences to 2D sequences
     self.outer = Outer1DTo2DLayer(
-        self.batch_size,
-        max_n_res=self.max_n_res,
-        pad_length=self.padding_length,
-        n_features=n_input,
-        in_layers=[in_layer, self.res_flag_2D, self.n_residues])
+        max_n_res = self.max_n_res,
+        in_layers=[in_layer, self.res_flag_2D])
     n_input = n_input*2
     in_layer = self.outer
 
+    # Add 2D convolutional layers and batch normalization layers
     self.conv_2D_layers = []
     for i, layer_2D in enumerate(self.n_filter_2D):
       n_output = layer_2D
@@ -111,13 +133,16 @@ class ConvNetContactMap(TensorGraph):
       self.batch_norm_layers.append(BatchNorm(in_layers=[in_layer]))
       in_layer = self.batch_norm_layers[-1]
 
+    # Transform all channels of a single contact to predicitons of contact probability
     self.gather_layer = ContactMapGather(
         n_input_feat=n_input,
         in_layers=[in_layer, self.res_flag_2D])
 
+    # Add output layer
     softmax = SoftMax(in_layers=[self.gather_layer])
     self.add_output(softmax)
 
+    # Add loss layer
     self.contact_labels = Label(shape=(None, 2))
     self.contact_weights = Weights(shape=(None,))
     cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_layer])
@@ -130,7 +155,7 @@ class ConvNetContactMap(TensorGraph):
                         epochs=1,
                         predict=False,
                         pad_batches=True):
-
+    """ Transform each batch into corresponding feed_dict """
     for epoch in range(epochs):
       for (X_b, y_b, w_b) in dataset.iterbatches(
           batch_size=self.batch_size,
@@ -150,8 +175,6 @@ class ConvNetContactMap(TensorGraph):
             weights.append(weight.flatten())
           feed_dict[self.contact_weights] = np.concatenate(labels, axis=0)
 
-        padding_length = self.padding_length
-        max_n_res = self.max_n_res
         res_features = []
         res_flag_1D = []
         res_flag_2D = []
@@ -159,16 +182,36 @@ class ConvNetContactMap(TensorGraph):
         for ids, seq_feat in enumerate(X_b):
           n_res, n_features = seq_feat.shape
           assert n_features == self.n_res_feat
-          flag_1D = [1]*n_res + [0]*padding_length
-          flag_2D = np.stack([flag_1D]*n_res + [[0]*(n_res+padding_length)]*(max_n_res-n_res), axis=1)
+          # Padding
+          flag_1D = [1]*n_res + [0]*(self.max_n_res-n_res)
+          flag_2D = [flag_1D]*n_res + [[0]*self.max_n_res]*(self.max_n_res-n_res)
           n_residues.append(n_res)
           res_flag_1D.append(np.array(flag_1D))
           res_flag_2D.append(np.array(flag_2D))
-          res_features.append(np.pad(seq_feat, ((0, padding_length), (0, 0)), 'constant'))
+          res_features.append(np.pad(seq_feat, ((0, self.max_n_res - n_res), (0, 0)), 'constant'))
 
-        feed_dict[self.res_features] = np.expand_dims(np.concatenate(res_features, axis=0), 0)
-        feed_dict[self.res_flag_1D] = np.expand_dims(np.concatenate(res_flag_1D, axis=0), 0)
-        feed_dict[self.res_flag_2D] = np.expand_dims(np.concatenate(res_flag_2D, axis=0), 0)
-        feed_dict[self.n_residues] = np.array(n_residues)
-        print(len(n_residues))
+        feed_dict[self.res_features] = np.stack(res_features, axis=0)
+        feed_dict[self.res_flag_1D] = np.stack(res_flag_1D, axis=0)
+        feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
+        #feed_dict[self.n_residues] = np.array(n_residues)
+        print('batch of %i' % len(n_residues))
         yield feed_dict
+
+  def evaluate(self, dataset, metrics):
+    """
+    Evaluates the performance of this model on specified dataset.
+    Parameters
+    """
+    w = np.concatenate([w_sample.flatten() for w_sample in dataset.w])
+    # Retrieve prediction and true label
+    y_pred = self.predict_proba(dataset)
+    y = np.concatenate([y_sample.flatten() for y_sample in dataset.y])*1
+    # Mask all predictions and labels with valid index
+    y_pred = y_pred[np.nonzero(w)]
+    y = y[np.nonzero(w)]
+    assert y_pred.shape[0] == y.shape[0]
+    results = {}
+    # Calculate performances
+    for metric in metrics:
+      results[metric.name] = metric.compute_metric(y, y_pred, w)
+    return results
