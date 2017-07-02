@@ -69,6 +69,7 @@ def load_CASP_all(raw=False, load_pdb=False):
   return merge_datasets(datasets)
 
 def load_PDB50(raw=False, load_pdb=False):
+  """ Load all samples from PDB50 subset """
   datasets_path = os.environ['PNET_DATA_DIR']
   path = os.path.join(datasets_path, 'PDB50')
   if raw:

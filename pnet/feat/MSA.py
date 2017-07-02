@@ -13,22 +13,26 @@ from pnet.utils import blastp_local, psiblast_local, hhblits_local
 from pnet.utils.amino_acids import AminoAcid
 
 def generate_raw(dataset):
+  """ Generate one hot feature for each residue """
   assert len(dataset.sequences) == 1
   sequences = [AminoAcid[res] for res in dataset.sequences[0]]
   return np.reshape(to_one_hot(np.array(sequences), n_classes=23), (len(sequences), 23))
 
 def to_one_hot(y, n_classes=23):
+  """ Sparse to one hot """
   n_samples = np.shape(y)[0]
   y_hot = np.zeros((n_samples, n_classes))
   y_hot[np.arange(n_samples), y.astype(np.int64)] = 1
   return y_hot
 
 def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=True):
+  """ Load multiple sequence alignment features(position frequency matrix) """
   msa = form_msa(dataset, mode=mode,
                  evalue=evalue,
                  num_iterations=num_iterations,
                  reload=reload)
   sequences = [[AminoAcid[res.upper()] for res in msa._hit_sequences[i]] for i in range(len(msa._hit_sequences))]
+  # Valid residue index
   index = [i for i, res in enumerate(msa.master_sequence) if res != '-']
   sequences = np.transpose(np.array(sequences))[index, :]
   def to_one_hot(res):
@@ -41,6 +45,7 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload
   for i, res_freq in enumerate(pfm):
     total_count = np.sum(res_freq)
     if total_count > 0:
+      # Calculate frequency
       pfm[i, :] = pfm[i, :]/total_count
   return pfm
 
@@ -51,6 +56,7 @@ def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=Tr
   data_dir = os.environ['PNET_DATA_DIR']
   msa_file = os.path.join(data_dir, 'MSA_All/'+dataset.IDs[0]+'.msa')
   if os.path.exists(msa_file) and reload:
+    # Load from file
     return load_msa(msa_file)
   if mode == "psiblast":
     path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)

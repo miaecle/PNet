@@ -10,7 +10,6 @@ import numpy as np
 import os
 import pandas as pd
 import pnet
-
 from pnet.utils import system_call
 
 def string_to_onehot_sa(sa):
@@ -18,6 +17,8 @@ def string_to_onehot_sa(sa):
   return np.array([state[a] for a in sa])
 
 def read_sa(path, dataset, order=None):
+  """ Read solvant accessibility prediction file
+  using specified order or automatically determined order based on results"""
   with open(path, 'r') as f:
     lines = f.readlines()
   lines = [line.split() for line in lines]

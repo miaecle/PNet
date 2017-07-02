@@ -17,6 +17,8 @@ def string_to_onehot_ss(ss):
   return np.array([state[a] for a in ss])
 
 def read_ss(path, dataset, order=None):
+  """ Read secondary structure prediction file
+  using specified order or automatically determined order based on results"""
   with open(path, 'r') as f:
     lines = f.readlines()
   lines = [line.split() for line in lines]

@@ -16,6 +16,7 @@ import subprocess
 from Bio.Blast.Applications import NcbiblastpCommandline, NcbipsiblastCommandline
 
 def system_call(command):
+  """ Wrapper for system command call """
   p = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True)
   return p.stdout.read()
 

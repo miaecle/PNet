@@ -18,6 +18,7 @@ import pnet
 from Bio.PDB import PDBList
 
 def merge_datasets(datasets):
+  """ Merge a list of datasets into one dataset """
   dataset = datasets[0]
   for i in range(1, len(datasets)):
     dataset.extend(datasets[i])
@@ -28,7 +29,24 @@ class SequenceDataset(object):
   Dataset class for protein sequences and structures
   """
   def __init__(self, IDs, sequences=None, pdb_paths=None, raw=None, load_pdb=False, keep_all=False):
-    """Hold information of IDs, sequences, path of pdb files and raw inputs"""
+    """Hold information of IDs, sequences, path of pdb files and raw inputs
+    
+    Parameters
+    ----------
+    IDs: list
+      list of strings including protein IDs in the dataset
+    sequences: list, optional
+      list of strings including protein sequences
+    pdb_paths: list, optional
+      list of strings including pdb paths for proteins in the dataset,
+      protein with no structure available will have None as placeholder
+    raw: list, optional
+      list of strings including .seq file input for protein sequences
+    load_pdb: bool, optional
+      whether to load pdb structures and build residue-residue contact maps
+    keep_all: bool, optional
+      whether to keep coordinates of all atoms(False = only keep beta-carbon)    
+    """
     self._IDs = list(IDs)
     self.n_samples = len(IDs)
     self.keep_all = keep_all
@@ -153,6 +171,7 @@ class SequenceDataset(object):
           return resseq_pos
 
   def get_num_samples(self):
+    """ return number of proteins in the dataset"""
     return self.n_samples
 
   def extend(self, extension_dataset):
@@ -160,6 +179,7 @@ class SequenceDataset(object):
     add_on = []
     for i, ID in enumerate(extension_dataset.IDs):
       if ID in self.IDs:
+        # Remove duplicate samples
         pass
       else:
         add_on.append(i)
@@ -173,6 +193,7 @@ class SequenceDataset(object):
     self._sequences.extend(sequences_add)
     self._raw.extend(raw_add)
     if self.load_pdb:
+      # Extend structure data
       if not extension_dataset.load_pdb:
         extension_dataset.load_structures()
       structures_add = list(np.array(extension_dataset.structures)[add_on])
@@ -210,7 +231,10 @@ class SequenceDataset(object):
         self._sequences[i] = sequence
 
   def build_raw(self, IDs=None):
-    """Build raw output(.seq, .fas) from sequence"""
+    """
+    Build raw output(.seq, .fas) from sequence
+    should be called before writing dataset
+    """
     if IDs == None:
       index = range(self.get_num_samples())
     else:
@@ -274,6 +298,7 @@ class SequenceDataset(object):
     else:
       result = SequenceDataset(IDs, sequences, pdb_paths, raw, load_pdb=False)
     if self.load_pdb:
+      # Directly port structure data to selected dataset
       result._structures = [self._structures[i] for i in index]
       result._resseqs = [self._resseqs[i] for i in index]
       result.xyz = [self.xyz[i] for i in index]
@@ -283,8 +308,7 @@ class SequenceDataset(object):
     return result
 
   def select_by_ID(self, IDs_selection):
-    """Creates a new dataset from a selection of IDs.
-    """
+    """ Creates a new dataset from a selection of IDs """
     index = []
     for i, ID in enumerate(self._IDs):
       if ID in IDs_selection:
@@ -292,6 +316,7 @@ class SequenceDataset(object):
     return self.select_by_index(index)
 
   def fetch_features(self, feat='MSA'):
+    """ Fetch certain features for all samples as a list """
     if feat == 'MSA':
       feat = pnet.feat.generate_msa
     elif feat == 'SS':
@@ -303,6 +328,7 @@ class SequenceDataset(object):
     return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
 
   def build_features(self, feat_list):
+    """ Build X based on specified list of features """
     if not feat_list.__class__ is list:
       feat_list = [feat_list]
     n_feats = len(feat_list)
@@ -312,10 +338,13 @@ class SequenceDataset(object):
 
   @property
   def n_features(self):
+    """ Return number of features for each sample,
+    can only be called after building X """
     assert self.X_built, "X not built"
     return self.X[0].shape[1]
 
   def build_labels(self, task='RR', binary=True, threshold=0.8):
+    """ Build labels(y and w) for all samples """
     if not self.load_pdb:
       self.load_structures(binary=binary, threshold=threshold)
     if task == 'RR':
@@ -373,6 +402,8 @@ class SequenceDataset(object):
   def itersamples(self):
     """Object that iterates over the samples in the dataset.
     """
+    assert self.X_built, "Dataset not ready for training, features must be built"
+    assert self.y_built, "Dataset not ready for training, labels must be built"
     def sample_iterate(dataset):
       n_samples = dataset.get_num_samples()
       for i in range(n_samples):
