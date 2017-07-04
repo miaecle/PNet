@@ -30,7 +30,7 @@ class SequenceDataset(object):
   """
   def __init__(self, IDs, sequences=None, pdb_paths=None, raw=None, load_pdb=False, keep_all=False):
     """Hold information of IDs, sequences, path of pdb files and raw inputs
-    
+
     Parameters
     ----------
     IDs: list
@@ -45,7 +45,7 @@ class SequenceDataset(object):
     load_pdb: bool, optional
       whether to load pdb structures and build residue-residue contact maps
     keep_all: bool, optional
-      whether to keep coordinates of all atoms(False = only keep beta-carbon)    
+      whether to keep coordinates of all atoms(False = only keep beta-carbon)
     """
     self._IDs = list(IDs)
     self.n_samples = len(IDs)
@@ -409,3 +409,19 @@ class SequenceDataset(object):
       for i in range(n_samples):
         yield self.X[i], self.y[i], self.w[i]
     return sample_iterate(self)
+
+  def train_valid_test_split(self,
+                             deterministic=False,
+                             train_frac=0.8,
+                             valid_frac=0.1,
+                             test_frac=0.1):
+    n_samples = self.get_num_samples()
+    if not deterministic:
+      sample_perm = np.random.permutation(n_samples)
+    else:
+      sample_perm = np.arange(n_samples)
+    assert np.allclose(train_frac + valid_frac + test_frac, 1)
+    train = self.select_by_index(sample_perm[:int(train_frac*n_samples)])
+    valid = self.select_by_index(sample_perm[int(train_frac*n_samples):int((train_frac+valid_frac)*n_samples)])
+    test = self.select_by_index(sample_perm[int((train_frac+valid_frac)*n_samples):])
+    return train, valid, test

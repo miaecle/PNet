@@ -205,15 +205,7 @@ class Conv2DLayer(Layer):
 class Outer1DTo2DLayer(Layer):
 
   def __init__(self,
-               batch_size,
-               max_n_res=1000,
-               pad_length=25,
-               n_features=50,
                **kwargs):
-    self.max_n_res = max_n_res
-    self.pad_length = pad_length
-    self.batch_size = batch_size
-    self.n_features = n_features
     super(Outer1DTo2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -229,32 +221,18 @@ class Outer1DTo2DLayer(Layer):
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
     self.build()
-    max_n_res = self.max_n_res
-    pad_length = self.pad_length
-    n_features = self.n_features
-    batch_size = self.batch_size
-
     input_features = in_layers[0].out_tensor
-    n_residues = in_layers[2].out_tensor + pad_length
-
-    pad_remains = max_n_res - n_residues
-    features_separated = tf.split(input_features, n_residues, axis=1)
-    features_padded = [tf.pad(features_separated[i],
-                              [[0,0],[0,pad_remains[i]],[0,0]],
-                              mode='CONSTANT') for i in range(batch_size)]
-    features_padded = [tf.reshape(
-        tf.expand_dims(tf.tile(features_padded[i],
-                               [1, n_residues[i], 1]), axis=0),
-        shape=[1, -1, max_n_res, n_features]) for i in range(batch_size)]
-
-    tensor1 = tf.stack([input_features]*max_n_res, axis=2)
-    tensor2 = tf.concat(features_padded, axis=1)
-
-    out_tensor = [tensor1, tensor2]
-    out_tensor = tf.concat(out_tensor, axis=3)
+    max_n_res = tf.reduce_max(in_layers[1].out_tensor, keep_dims=True)
+    tensor1 = tf.expand_dims(input_features, axis=1)
+    max_n_res1 = tf.concat([tf.constant([1]), max_n_res, tf.constant([1]), tf.constant([1])], axis=0)
+    tensor1 = tf.tile(tensor1, max_n_res1)
+    tensor2 = tf.expand_dims(input_features, axis=2)
+    max_n_res2 = tf.concat([tf.constant([1]), tf.constant([1]), max_n_res, tf.constant([1])], axis=0)
+    tensor2 = tf.tile(tensor2, max_n_res2)
+    out_tensor = tf.concat([tensor1, tensor2], axis=3)
 
     if len(in_layers) > 1:
-      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
     if set_tensors:
       self.variables = self.trainable_weights
