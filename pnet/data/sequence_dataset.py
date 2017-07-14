@@ -15,6 +15,7 @@ import pandas as pd
 import mdtraj as md
 import Bio
 import pnet
+import pickle
 from Bio.PDB import PDBList
 
 def merge_datasets(datasets):
@@ -68,7 +69,7 @@ class SequenceDataset(object):
     self.X_built = False
     self.y_built = False
 
-  def load_structures(self, binary=False, threshold=0.8):
+  def load_structures(self, binary=False, threshold=0.8, weight_adjust=1.):
     """
     load pdb structures for samples
     generate 3D coordinates and residue-residue contact map
@@ -147,6 +148,11 @@ class SequenceDataset(object):
           RR = np.asarray(-RR + threshold > 0, dtype=bool)
           RR[invalid_index, :] = False
           RR[:, invalid_index] = False
+          RR_weight_adjust = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
+                                    np.stack([np.arange(n_residues)] * n_residues, axis=1))
+          RR_weight_adjust = RR.astype(float) * RR_weight_adjust * weight_adjust
+          RR_weight = RR_weight + RR_weight_adjust
+
 
         ts.append(t)
         resseqs.append(resseq)
@@ -327,14 +333,24 @@ class SequenceDataset(object):
       feat = pnet.feat.generate_raw
     return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
 
-  def build_features(self, feat_list):
+  def build_features(self, feat_list, reload=True, path=None):
     """ Build X based on specified list of features """
+    if not path is None:
+      path = os.path.join(path, 'X.pkl')
+      if reload and os.path.exists(path):
+        with open(path, 'r') as f:
+          self.X = pickle.load(f)
+          self.X_built = True
+          return
     if not feat_list.__class__ is list:
       feat_list = [feat_list]
     n_feats = len(feat_list)
     X = [self.fetch_features(feat=feature) for feature in feat_list]
     self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
     self.X_built = True
+    if reload and not path is None:
+      with open(path, 'w') as f:
+        pickle.dump(self.X, f)
 
   @property
   def n_features(self):
@@ -343,10 +359,21 @@ class SequenceDataset(object):
     assert self.X_built, "X not built"
     return self.X[0].shape[1]
 
-  def build_labels(self, task='RR', binary=True, threshold=0.8):
+  def build_labels(self, task='RR', binary=True, threshold=0.8, weight_adjust=1., reload=True, path=None):
     """ Build labels(y and w) for all samples """
+    if not path is None:
+      path = os.path.join(path, 'yw.pkl')
+      if reload and os.path.exists(path):
+        with open(path, 'r') as f:
+          YW = pickle.load(f)
+          self.y = YW[0]
+          self.w = YW[1]
+          self.y_built = True
+          return
     if not self.load_pdb:
-      self.load_structures(binary=binary, threshold=threshold)
+      self.load_structures(binary=binary,
+                           threshold=threshold,
+                           weight_adjust=weight_adjust)
     if task == 'RR':
       self.y = self.RRs
       self.w = self.RR_weights
@@ -354,6 +381,9 @@ class SequenceDataset(object):
       self.y = self.xyz
       self.w = [1 for i in range(self.n_samples)]
     self.y_built = True
+    if reload and not path is None:
+      with open(path, 'w') as f:
+        pickle.dump([self.y, self.w], f)
 
   def iterbatches(self,
                   batch_size=None,

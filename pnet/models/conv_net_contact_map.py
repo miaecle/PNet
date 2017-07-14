@@ -142,7 +142,7 @@ class ConvNetContactMap(TensorGraph):
 
     # Add loss layer
     self.contact_labels = Label(shape=(None, 2))
-    self.contact_weights = Weights(shape=(None,))
+    self.contact_weights = Weights(shape=(None, 1))
     cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_layer])
     all_loss = WeightedError(in_layers=[cost, self.contact_weights])
     self.set_loss(all_loss)
@@ -171,7 +171,7 @@ class ConvNetContactMap(TensorGraph):
           weights = []
           for ids, weight in enumerate(w_b):
             weights.append(weight.flatten())
-          feed_dict[self.contact_weights] = np.concatenate(labels, axis=0)
+          feed_dict[self.contact_weights] = np.reshape(np.concatenate(weights, axis=0), (-1, 1))
 
         res_features = []
         res_flag_1D = []
@@ -199,16 +199,27 @@ class ConvNetContactMap(TensorGraph):
     Evaluates the performance of this model on specified dataset.
     Parameters
     """
-    w = np.concatenate([w_sample.flatten() for w_sample in dataset.w])
+    w_all = []
+    for w_sample in dataset.w:
+      w_sample = np.sign(w_sample)
+      n_residues = w_sample.shape[0]
+      full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
+                   np.stack([np.arange(n_residues)] * n_residues, axis=1))
+      range_short = ((11 - full_range ) >= 0).astype(float) * ((full_range - 6 ) >= 0).astype(float) * w_sample
+      range_medium = ((23 - full_range ) >= 0).astype(float) * ((full_range - 12 ) >= 0).astype(float)  * w_sample
+      range_long = ((full_range - 24 ) >= 0).astype(float) * w_sample
+      w_all.append(np.stack([range_short.flatten(), range_medium.flatten(), range_long.flatten()], 1))
+
+    w = np.concatenate(w_all, axis=0)
     # Retrieve prediction and true label
     y_pred = self.predict_proba(dataset)
     y = np.concatenate([y_sample.flatten() for y_sample in dataset.y])*1
     # Mask all predictions and labels with valid index
-    y_pred = y_pred[np.nonzero(w)]
-    y = y[np.nonzero(w)]
-    assert y_pred.shape[0] == y.shape[0]
-    results = {}
-    # Calculate performances
-    for metric in metrics:
-      results[metric.name] = metric.compute_metric(y, y_pred)
+    results = [{}, {}, {}]
+    for i in range(3):
+      y_pred = y_pred[np.nonzero(w[:, i])]
+      y = y[np.nonzero(w[:, i])]
+      # Calculate performances
+      for metric in metrics:
+        results[i][metric.name] = metric.compute_metric(y, y_pred)
     return results
