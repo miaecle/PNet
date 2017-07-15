@@ -217,9 +217,9 @@ class ConvNetContactMap(TensorGraph):
     # Mask all predictions and labels with valid index
     results = [{}, {}, {}]
     for i in range(3):
-      y_pred = y_pred[np.nonzero(w[:, i])]
-      y = y[np.nonzero(w[:, i])]
+      y_eval = y_pred[np.nonzero(w[:, i])]
+      y_true = y[np.nonzero(w[:, i])]
       # Calculate performances
       for metric in metrics:
-        results[i][metric.name] = metric.compute_metric(y, y_pred)
+        results[i][metric.name] = metric.compute_metric(y_true, y_eval)
     return results
