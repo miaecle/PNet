@@ -18,11 +18,11 @@ name_datasets = ['train', 'valid', 'test']
 for i, dataset in enumerate([train, valid, test]):
   path = os.path.join(data_dir, name_datasets[i])
   dataset.build_features(['raw', 'MSA', 'SS', 'SA'], path=path)
-  dataset.build_labels(path=path)
+  dataset.build_labels(path=path, weight_adjust=30.)
 
-batch_size = 4
+batch_size = 1
 n_features = train.n_features
-metrics = [dc.metrics.Metric(dc.metrics.accuracy_score, np.mean, mode="classification")]
+metrics = [dc.metrics.Metric(dc.metrics.roc_auc_score, np.mean, mode="classification")]
 
 model = pnet.models.ConvNetContactMap(
     n_res_feat=n_features,
@@ -31,18 +31,7 @@ model = pnet.models.ConvNetContactMap(
     use_queue=False,
     mode='classification')
 
-model.fit(train, nb_epoch=5, checkpoint_interval=20)
-valid_scores = model.evaluate(valid, metrics)
-print(valid_scores)
-model.fit(train, nb_epoch=5)
-valid_scores = model.evaluate(valid, metrics)
-print(valid_scores)
-model.fit(train, nb_epoch=5)
-valid_scores = model.evaluate(valid, metrics)
-print(valid_scores)
-model.fit(train, nb_epoch=5)
-valid_scores = model.evaluate(valid, metrics)
-print(valid_scores)
+model.fit(train, nb_epoch=200, checkpoint_interval=20)
 
 train_scores = model.evaluate(train, metrics)
 print(train_scores)

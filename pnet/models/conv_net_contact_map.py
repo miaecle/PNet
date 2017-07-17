@@ -10,7 +10,7 @@ import tensorflow as tf
 from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, Weights, Feature
-from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather
+from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd
 
 def to_one_hot(y, n_classes=2):
   """Transforms label vector into one-hot encoding.
@@ -36,10 +36,10 @@ class ConvNetContactMap(TensorGraph):
                n_res_feat,
                embedding=True,
                embedding_length=50,
-               filter_size_1D=[51, 25, 11],
-               n_filter_1D=[50, 50, 50],
-               filter_size_2D=[25, 25, 25],
-               n_filter_2D=[50, 50, 50],
+               filter_size_1D=[17]*6,
+               n_filter_1D=[6]*6,
+               filter_size_2D=[3]*10,
+               n_filter_2D=list(range(35, 65, 5))+[60]*4,
                max_n_res=1000,
                **kwargs):
     """
@@ -99,6 +99,18 @@ class ConvNetContactMap(TensorGraph):
     # Add 1D convolutional layers and batch normalization layers
     self.conv_1D_layers = []
     self.batch_norm_layers = []
+    self.res_layers = []
+
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input,
+        n_output_feat=self.n_filter_1D[0],
+        n_size=self.filter_size_1D[0],
+        activation_first=False,
+        in_layers=[in_layer, self.res_flag_1D]))
+    n_input = self.n_filter_1D[0]
+    in_layer = self.conv_1D_layers[-1]
+    res_in = in_layer
+
     for i, layer_1D in enumerate(self.n_filter_1D):
       n_output = layer_1D
       self.conv_1D_layers.append(Conv1DLayer(
@@ -106,16 +118,21 @@ class ConvNetContactMap(TensorGraph):
           n_output_feat=n_output,
           n_size=self.filter_size_1D[i],
           in_layers=[in_layer, self.res_flag_1D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_1D_layers[-1]]))
       n_input = n_output
-      in_layer = self.conv_1D_layers[-1]
-      # self.batch_norm_layers.append(BatchNorm(in_layers=[in_layer]))
-      # in_layer = self.batch_norm_layers[-1]
+      in_layer = self.batch_norm_layers[-1]
+      if i%2 == 1:
+        self.res_layers.append(ResAdd(in_layers=[in_layer, res_in]))
+        in_layer = self.res_layers[-1]
+        res_in = self.res_layers[-1]
 
     # Add transform layer from 1D sequences to 2D sequences
     self.outer = Outer1DTo2DLayer(
         in_layers=[in_layer, self.n_residues, self.res_flag_2D])
     n_input = n_input*2
+    length_outer = n_input
     in_layer = self.outer
+    res_in = self.outer
 
     # Add 2D convolutional layers and batch normalization layers
     self.conv_2D_layers = []
@@ -126,10 +143,17 @@ class ConvNetContactMap(TensorGraph):
           n_output_feat=n_output,
           n_size=self.filter_size_2D[i],
           in_layers=[in_layer, self.res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_2D_layers[-1]]))
       n_input = n_output
-      in_layer = self.conv_2D_layers[-1]
-      # self.batch_norm_layers.append(BatchNorm(in_layers=[in_layer]))
-      # in_layer = self.batch_norm_layers[-1]
+      in_layer = self.batch_norm_layers[-1]
+      if i == 1:
+        self.res_layers.append(ResAdd(x_in_channels=length_outer, in_layers=[in_layer, res_in]))
+        in_layer = self.res_layers[-1]
+        res_in = self.res_layers[-1]
+      elif i%2 == 1:
+        self.res_layers.append(ResAdd(in_layers=[in_layer, res_in]))
+        in_layer = self.res_layers[-1]
+        res_in = self.res_layers[-1]
 
     # Transform all channels of a single contact to predicitons of contact probability
     self.gather_layer = ContactMapGather(
@@ -191,7 +215,6 @@ class ConvNetContactMap(TensorGraph):
         feed_dict[self.res_flag_1D] = np.stack(res_flag_1D, axis=0)
         feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
         feed_dict[self.n_residues] = np.array(n_residues)
-        print('batch of %i, maximum number of residues %i' % (len(n_residues), max_n_res))
         yield feed_dict
 
   def evaluate(self, dataset, metrics):

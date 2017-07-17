@@ -83,6 +83,7 @@ class Conv1DLayer(Layer):
                n_size,
                init='glorot_uniform',
                activation='relu',
+               activation_first=True,
                dropout=None,
                **kwargs):
     """
@@ -104,6 +105,7 @@ class Conv1DLayer(Layer):
     """
     self.init = initializations.get(init)  # Set weight initialization
     self.activation = activations.get(activation)  # Get activations
+    self.activation_first = activation_first # If to switch the order of convolution and activation
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
@@ -127,12 +129,15 @@ class Conv1DLayer(Layer):
     self.build()
 
     input_features = in_layers[0].out_tensor
+    if self.activation_first:
+      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
       out_tensor = out_tensor * tf.to_float(flag)
-    out_tensor = self.activation(out_tensor)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -147,6 +152,7 @@ class Conv2DLayer(Layer):
                n_size,
                init='glorot_uniform',
                activation='relu',
+               activation_first=True,
                dropout=None,
                **kwargs):
     """
@@ -171,6 +177,7 @@ class Conv2DLayer(Layer):
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
+    self.activation_first = activation_first
     super(Conv2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -191,12 +198,15 @@ class Conv2DLayer(Layer):
     self.build()
 
     input_features = in_layers[0].out_tensor
+    if self.activation_first:
+      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv2d(input_features, self.W, strides=[1, 1, 1, 1], padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
-    out_tensor = self.activation(out_tensor)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -273,5 +283,40 @@ class ContactMapGather(Layer):
     out_tensor = tf.nn.xw_plus_b(out_tensor, self.W, self.b)
     if set_tensors:
       self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class ResAdd(Layer):
+
+  def __init__(self,
+               fx_in_channels=None,
+               x_in_channels=None,
+               **kwargs):
+    self.fx_in_channels = fx_in_channels
+    self.x_in_channels = x_in_channels
+    super(ResAdd, self).__init__(**kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: fx, x
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    fx = in_layers[0].out_tensor
+    x = in_layers[1].out_tensor
+
+    pad_dimension = len(x.get_shape()) - 1
+    if self.fx_in_channels is None:
+      self.fx_in_channels = fx.get_shape().as_list()[-1]
+    if self.x_in_channels is None:
+      self.x_in_channels = x.get_shape().as_list()[-1]
+
+    pad_length = self.fx_in_channels - self.x_in_channels
+
+    pad = [[0,0]] * pad_dimension + [[0, pad_length]]
+    out_tensor = fx + tf.pad(x, pad, "CONSTANT")
+    if set_tensors:
+      self.variables = None
       self.out_tensor = out_tensor
     return out_tensor
