@@ -66,10 +66,6 @@ class ConvNetContactMapTorch(TorchModel):
 
   def build(self):
     """Constructs the graph architecture as specified in its config.
-
-    This method creates the following Placeholders:
-      mol_features: Molecule descriptor (e.g. fingerprint) tensor with shape
-        batch_size x n_features.
     """
 
     filter_size_1D = self.filter_size_1D
@@ -80,7 +76,7 @@ class ConvNetContactMapTorch(TorchModel):
     self.conv_2d_layers = []
     self.batch_norm_layers = []
     self.residue_embedding = TorchResidueEmbedding()
-    
+
     self.conv_layers.append(torch.nn.Conv1d(self.n_res_feat, n_filter_1D[0], filter_size_1D[0]))
     in_channels = n_filter_1D[0]
     for i, filter_1D in enumerate(filter_size_1D):
@@ -93,23 +89,12 @@ class ConvNetContactMapTorch(TorchModel):
       self.conv_2d_layers.append(torch.nn.Conv2d(in_channels, n_filter_2D[i], filter_2D))
       in_channels = n_filter_2D[i]
       self.batch_norm_layers.append(torch.nn.BatchNorm2d(in_channels))
-    
+
     self.gather_layer = TorchContactMapGather()
 
   def forward(self, X, training=False):
-    '''
-    for i, W in enumerate(self.W_list):
-      X = X.mm(W)
-      X += self.b_list[i].unsqueeze(0).expand_as(X)
-      X = torch.nn.ReLU()(X)
-      if training:
-        X = torch.nn.Dropout(p=self.dropouts[i])(X)
-    outputs = []
-    for i, W in enumerate(self.task_W_list):
-      output = X.mm(W)
-      output += self.task_b_list[i].unsqueeze(0).expand_as(output)
-      outputs.append(output)
-    '''
+    X = self.residue_embedding(X)
+
     return outputs
 
   def cost(self, logit, label, weight):
