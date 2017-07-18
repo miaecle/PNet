@@ -1,3 +1,10 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jul 17 21:59:10 2017
+
+@author: zqwu
+"""
 # -*- coding: utf-8 -*-
 """
 Created on Mon Mar 13 22:31:24 2017
@@ -6,185 +13,130 @@ Created on Mon Mar 13 22:31:24 2017
 """
 
 import torch
-import time
 import numpy as np
+import pnet
+from pnet.models.torch_base import TorchModel
 
-from deepchem.models import Model
 
-class TorchModel(Model):
+class ConvNetContactMapTorch(TorchModel):
 
   def __init__(self,
-               n_tasks=1,
-               learning_rate=.001,
-               momentum=.9,
-               optimizer="adam",
-               batch_size=16,
-               pad_batches=False,
-               seed=None):
-    """Abstract class for Torch models
-
-    Parameters
-    ----------
-    n_tasks: int, optional
-      Number of tasks
-    learning_rate: float, optional
-      Learning rate for model.
-    momentum: float, optional
-      Momentum. Only applied if optimizer=="momentum"
-    optimizer: str, optional
-      Type of optimizer applied.
-    batch_size: int, optional
-      Size of minibatches for training.GraphConv
-    pad_batches: bool, optional
-      Perform logging.
-    seed: int, optional
-      If not none, is used as random seed for tensorflow.
+               n_res_feat,
+               embedding=True,
+               embedding_length=50,
+               filter_size_1D=[17]*6,
+               n_filter_1D=[6]*6,
+               filter_size_2D=[3]*10,
+               n_filter_2D=list(range(35, 65, 5))+[60]*4,
+               max_n_res=1000,
+               **kwargs):
     """
-    # Save hyperparameters
-    self.n_tasks = n_tasks
-    self.learning_rate = learning_rate
-    self.momentum = momentum
-    self.optimizer = optimizer
-    self.batch_size = batch_size
-    self.pad_batches = pad_batches
-    self.seed = seed
-
-    self.build()
-    self.optimizer = self.get_training_op()
-
-  def add_training_cost(self, outputs, labels, weights):
-    weighted_costs = []  # weighted costs for each example
-    for task in range(self.n_tasks):
-      weighted_cost = self.cost(outputs[task], labels[:, task],
-                                weights[:, task])
-      weighted_costs.append(weighted_cost)
-    loss = torch.cat(weighted_costs).sum()
-    # weight decay
-    if self.penalty > 0.0:
-      for variable in self.regularizaed_variables:
-        loss += self.penalty * 0.5 * variable.mul(variable).sum()
-    return loss
-
-  def get_training_op(self):
-    """Get training op for applying gradients to variables.
-
-    Subclasses that need to do anything fancy with gradients should override
-    this method.
-
-    Returns:
-    An optimizer
+    Parameters:
+    -----------
+    n_res_feat: int
+      number of features for each residue
+    embedding: bool, optional
+      whether to transfer the first 23 features(one hot encoding of residue
+      type) to variable embedding
+    embedding_length: int, optional
+      length of embedding
+    filter_size_1D: list, optional
+      structure of 1D convolution: size of convolution
+    n_filter_1D: list, optional
+      structure of 1D convolution: depths of convolution
+    filter_size_2D: list, optional
+      structure of 2D convolution: size of convolution
+    n_filter_2D: list, optional
+      structure of 2D convolution: depths of convolution
+    max_n_res: int, optional
+      maximum number of residues, used for padding
     """
-    if self.optimizer == "adam":
-      train_op = torch.optim.Adam(self.trainables, lr=self.learning_rate)
-    elif self.optimizer == 'adagrad':
-      train_op = torch.optim.Adagrad(self.trainables, lr=self.learning_rate)
-    elif self.optimizer == 'rmsprop':
-      train_op = torch.optim.RMSprop(
-          self.trainables, lr=self.learning_rate, momentum=self.momentum)
-    elif self.optimizer == 'sgd':
-      train_op = torch.optim.SGD(self.trainables, lr=self.learning_rate)
-    else:
-      raise NotImplementedError('Unsupported optimizer %s' % self.optimizer)
-    return train_op
-
-  def fit(self,
-          dataset,
-          nb_epoch=10,
-          max_checkpoints_to_keep=5,
-          log_every_N_batches=5,
-          checkpoint_interval=100):
-    return self.fit_generator(
-        self.default_generator(dataset, epochs=nb_epoch),
-        max_checkpoints_to_keep, log_every_N_batches=log_every_N_batches,
-        checkpoint_interval)
-
-  def fit_generator(self,
-          generator,
-          max_checkpoints_to_keep=5,
-          log_every_N_batches=5,
-          checkpoint_interval=10):
-    """Fit the model.
-
-    Parameters
-    ----------
-    generator: generator object
-      generate batch of data
-    nb_epoch: 10
-      Number of training epochs.
-    max_checkpoints_to_keep: int
-      Maximum number of checkpoints to keep; older checkpoints will be deleted.
-    log_every_N_batches: int
-      Report every N batches. Useful for training on very large datasets,
-      where epochs can take long time to finish.
-    checkpoint_interval: int
-      Frequency at which to write checkpoints, measured in epochs
-    """
-    ############################################################## TIMING
-    time1 = time.time()
-    ############################################################## TIMING
-    avg_loss, n_batches = 0., 0
-    for inputs, labels, weights in generator:
-        if n_batches % log_every_N_batches == 0 and n_batches > 0:
-          loss_out = float(avg_loss.data.cpu().numpy()) / n_batches
-          print("On batch %d, loss %f" % (n_batches, loss_out))
-        # Run training op.
-        self.optimizer.zero_grad()
-        outputs = self.forward(inputs, training=True)
-        loss = self.add_training_cost(outputs, labels, weights)
-        loss.backward()
-        self.optimizer.step()
-        avg_loss += loss
-        n_batches += 1
-    ############################################################## TIMING
-    time2 = time.time()
-    print("TIMING: model fitting took %0.3f s" % (time2 - time1), self.verbose)
-    ############################################################## TIMING
-
-  def predict(self, dataset):
-    generator = self.default_generator(dataset, predict=True, pad_batches=False)
-    return self.predict_on_generator(generator)
-
-  def predict_proba(self, dataset):
-    generator = self.default_generator(dataset, predict=True, pad_batches=False)
-    return self.predict_proba_on_generator(generator)
-
-  def predict_on_generator(self, generator):
-    """
-    Uses self to make predictions on provided Dataset object.
-
-    Returns:
-      y_pred: numpy ndarray of shape (n_samples,)
-    """
-    y_preds = []
-    n_tasks = self.n_tasks
-    for inputs, labels, weights in generator:
-      y_pred_batch = self.predict_on_batch(inputs)
-      assert y_pred_batch.shape[1] == n_tasks
-      y_preds.append(y_pred_batch)
-    y_pred = np.concatenate(y_preds, axis=0)
-    return y_pred
-
-  def predict_proba_on_generator(self, generator):
-    y_preds = []
-    n_tasks = self.n_tasks
-    for inputs, labels, weights in generator:
-      y_pred_batch = self.predict_on_batch(inputs)
-      assert y_pred_batch.shape[1] == n_tasks
-      y_preds.append(y_pred_batch)
-    y_pred = np.concatenate(y_preds, axis=0)
-    return y_pred
+    self.n_res_feat = n_res_feat
+    self.embedding = embedding
+    self.embedding_length = embedding_length
+    self.filter_size_1D = filter_size_1D
+    self.n_filter_1D = n_filter_1D
+    assert len(n_filter_1D) == len(filter_size_1D)
+    self.filter_size_2D = filter_size_2D
+    self.n_filter_2D = n_filter_2D
+    assert len(n_filter_2D) == len(filter_size_2D)
+    self.max_n_res = max_n_res
+    self.padding_length = int(np.ceil(max(filter_size_1D + filter_size_2D)/2.))
+    super(ConvNetContactMap, self).__init__(**kwargs)
 
   def build(self):
-    raise NotImplementedError('Must be overridden by concrete subclass')
+    """Constructs the graph architecture as specified in its config.
+
+    This method creates the following Placeholders:
+      mol_features: Molecule descriptor (e.g. fingerprint) tensor with shape
+        batch_size x n_features.
+    """
+
+    filter_size_1D = self.filter_size_1D
+    n_filter_1D = self.n_filter_1D
+    filter_size_2D = self.filter_size_2D
+    n_filter_2D = self.n_filter_2D
+    self.conv_1d_layers = []
+    self.conv_2d_layers = []
+    self.batch_norm_layers = []
+    self.residue_embedding = TorchResidueEmbedding()
+    
+    self.conv_layers.append(torch.nn.Conv1d(self.n_res_feat, n_filter_1D[0], filter_size_1D[0]))
+    in_channels = n_filter_1D[0]
+    for i, filter_1D in enumerate(filter_size_1D):
+      self.conv_layers.append(torch.nn.Conv1d(in_channels, n_filter_1D[i], filter_1D))
+      in_channels = n_filter_1D[i]
+      self.batch_norm_layers.append(torch.nn.BatchNorm1d(in_channels))
+
+    in_channels = 2 * in_channels
+    for i, filter_2D in enumerate(filter_size_2D):
+      self.conv_2d_layers.append(torch.nn.Conv2d(in_channels, n_filter_2D[i], filter_2D))
+      in_channels = n_filter_2D[i]
+      self.batch_norm_layers.append(torch.nn.BatchNorm2d(in_channels))
+    
+    self.gather_layer = TorchContactMapGather()
 
   def forward(self, X, training=False):
-    raise NotImplementedError('Must be overridden by concrete subclass')
+    '''
+    for i, W in enumerate(self.W_list):
+      X = X.mm(W)
+      X += self.b_list[i].unsqueeze(0).expand_as(X)
+      X = torch.nn.ReLU()(X)
+      if training:
+        X = torch.nn.Dropout(p=self.dropouts[i])(X)
+    outputs = []
+    for i, W in enumerate(self.task_W_list):
+      output = X.mm(W)
+      output += self.task_b_list[i].unsqueeze(0).expand_as(output)
+      outputs.append(output)
+    '''
+    return outputs
 
   def cost(self, logit, label, weight):
-    raise NotImplementedError('Must be overridden by concrete subclass')
+    '''
+    loss = []
+    loss_func = torch.nn.MSELoss()
+    for i in range(logit.size()[0]):
+      loss.append(loss_func(logit[i], label[i]).mul(weight[i]))
+    loss = torch.cat(loss).mean()
+    '''
+    return loss
 
   def predict_on_batch(self, X_batch):
-    raise NotImplementedError('Must be overridden by concrete subclass')
+    '''
+    X_batch = torch.autograd.Variable(torch.cuda.FloatTensor(X_batch))
+    outputs = self.forward(X_batch, training=False)
+    y_pred_batch = torch.stack(outputs, 1).data.cpu().numpy()[:]
+    y_pred_batch = np.squeeze(y_pred_batch, axis=2)
+    '''
+    return y_pred_batch
 
   def predict_proba_on_batch(self, X_batch):
-    raise NotImplementedError('Must be overridden by concrete subclass')
+    return predict_on_batch(X_batch)
+
+
+  def default_generator(self,
+                        dataset,
+                        epochs=1,
+                        predict=False,
+                        pad_batches=True):

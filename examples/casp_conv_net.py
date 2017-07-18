@@ -17,6 +17,7 @@ name_datasets = ['train', 'valid', 'test']
 
 for i, dataset in enumerate([train, valid, test]):
   path = os.path.join(data_dir, name_datasets[i])
+  os.mkdir(path)
   dataset.build_features(['raw', 'MSA', 'SS', 'SA'], path=path)
   dataset.build_labels(path=path, weight_adjust=30.)
 
