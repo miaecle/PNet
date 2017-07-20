@@ -78,7 +78,10 @@ class TorchResidueEmbedding(torch.nn.Module):
 
   def forward(self, x):
     res_one_hot = torch.transpose(x[:, self.pos_start:self.pos_end, :], 1, 2)
-    embedded_features = torch.transpose(torch.matmul(res_one_hot, self.embedding), 1, 2)
+    shape = list(res_one_hot.size())
+    res_one_hot = res_one_hot.contiguous().view([shape[0]*shape[1], shape[2]])
+    res_one_hot = res_one_hot.mm(self.embedding)
+    embedded_features = torch.transpose(res_one_hot.view([shape[0], shape[1], -1]), 1, 2)
     out_tensor = torch.cat([embedded_features, x[:, self.pos_end:, :]], 1)
     return out_tensor
 

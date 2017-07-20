@@ -1,2 +1,3 @@
 import layers
 from conv_net_contact_map import ConvNetContactMap
+from conv_net_contact_map_torch import ConvNetContactMapTorch

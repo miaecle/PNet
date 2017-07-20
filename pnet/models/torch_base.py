@@ -8,7 +8,7 @@ Created on Mon Mar 13 22:31:24 2017
 import torch
 import time
 import numpy as np
-
+import itertools
 from deepchem.models import Model
 
 class TorchModel(Model):
@@ -48,24 +48,10 @@ class TorchModel(Model):
     self.batch_size = batch_size
     self.pad_batches = pad_batches
     self.seed = seed
-
+    self.trainable_layers = []
     self.build()
     self.optimizer = self.get_training_op()
-    self.variables = []
     self.regularizaed_variables = []
-
-  def add_training_cost(self, outputs, labels, weights):
-    weighted_costs = []  # weighted costs for each example
-    for task in range(self.n_tasks):
-      weighted_cost = self.cost(outputs[task], labels[:, task],
-                                weights[:, task])
-      weighted_costs.append(weighted_cost)
-    loss = torch.cat(weighted_costs).sum()
-    # weight decay
-    if self.penalty > 0.0:
-      for variable in self.regularizaed_variables:
-        loss += self.penalty * 0.5 * variable.mul(variable).sum()
-    return loss
 
   def get_training_op(self):
     """Get training op for applying gradients to variables.
@@ -76,6 +62,8 @@ class TorchModel(Model):
     Returns:
     An optimizer
     """
+    trainables = [layer.parameters() for layer in self.trainable_layers]
+    self.trainables = itertools.chain(*trainables)
     if self.optimizer == "adam":
       train_op = torch.optim.Adam(self.trainables, lr=self.learning_rate)
     elif self.optimizer == 'adagrad':
@@ -98,7 +86,7 @@ class TorchModel(Model):
     return self.fit_generator(
         self.default_generator(dataset, epochs=nb_epoch),
         max_checkpoints_to_keep, log_every_N_batches=log_every_N_batches,
-        checkpoint_interval)
+        checkpoint_interval=checkpoint_interval)
 
   def fit_generator(self,
           generator,
@@ -126,7 +114,7 @@ class TorchModel(Model):
     ############################################################## TIMING
     avg_loss, n_batches = 0., 0
     for inputs, labels, weights in generator:
-      if n_batches % log_every_N_batches == 0 and n_batches > 0:
+      if n_batches % checkpoint_interval == 0 and n_batches > 0:
         loss_out = float(avg_loss.data.cpu().numpy()) / n_batches
         print("On batch %d, loss %f" % (n_batches, loss_out))
       # Run training op.
@@ -142,6 +130,19 @@ class TorchModel(Model):
     print("TIMING: model fitting took %0.3f s" % (time2 - time1), self.verbose)
     ############################################################## TIMING
 
+  def add_training_cost(self, outputs, labels, weights):
+    weighted_costs = []  # weighted costs for each example
+    for task in range(self.n_tasks):
+      weighted_cost = self.cost(outputs[task], labels[:, task],
+                                weights[:, task])
+      weighted_costs.append(weighted_cost)
+    loss = torch.cat(weighted_costs).sum()
+    # weight decay
+    if self.penalty > 0.0:
+      for variable in self.regularizaed_variables:
+        loss += self.penalty * 0.5 * variable.mul(variable).sum()
+    return loss
+    
   def predict(self, dataset):
     generator = self.default_generator(dataset, predict=True, pad_batches=False)
     return self.predict_on_generator(generator)

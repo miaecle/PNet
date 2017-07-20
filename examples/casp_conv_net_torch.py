@@ -20,16 +20,14 @@ for i, dataset in enumerate([train, valid, test]):
   dataset.build_features(['raw', 'MSA', 'SS', 'SA'], path=path)
   dataset.build_labels(path=path, weight_adjust=30.)
 
-batch_size = 1
+batch_size = 2
 n_features = train.n_features
 metrics = [dc.metrics.Metric(dc.metrics.roc_auc_score, np.mean, mode="classification")]
 
-model = pnet.models.ConvNetContactMap(
+model = pnet.models.ConvNetContactMapTorch(
     n_res_feat=n_features,
     learning_rate=1e-3,
-    batch_size=batch_size,
-    use_queue=False,
-    mode='classification')
+    batch_size=batch_size)
 
 model.fit(train, nb_epoch=200, checkpoint_interval=20)
 
