@@ -135,6 +135,7 @@ class SequenceDataset(object):
 
         RR = np.zeros((n_residues, n_residues, 3))
         RR_weight = np.ones((n_residues, n_residues))
+
         RR[:,:,:] = coordinate
         # Pairwise distance calculation
         RR = np.sqrt(np.sum(np.square(RR - np.transpose(RR, (1, 0, 2))), axis=2))
@@ -152,6 +153,9 @@ class SequenceDataset(object):
                                     np.stack([np.arange(n_residues)] * n_residues, axis=1))
           RR_weight_adjust = RR.astype(float) * RR_weight_adjust * weight_adjust
           RR_weight = RR_weight + RR_weight_adjust
+          full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
+              np.stack([np.arange(n_residues)] * n_residues, axis=1))
+          RR_weight = RR_weight * ((full_range - 6 ) >= 0).astype(float)
 
 
         ts.append(t)
