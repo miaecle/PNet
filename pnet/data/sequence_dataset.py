@@ -157,7 +157,6 @@ class SequenceDataset(object):
               np.stack([np.arange(n_residues)] * n_residues, axis=1))
           RR_weight = RR_weight * ((full_range - 6 ) >= 0).astype(float)
 
-
         ts.append(t)
         resseqs.append(resseq)
         xyz.append(coordinate)
@@ -315,6 +314,13 @@ class SequenceDataset(object):
       result.RRs = [self.RRs[i] for i in index]
       result.RR_weights = [self.RR_weights[i] for i in index]
       result.load_pdb = True
+    if self.X_built:
+      result.X = [self.X[i] for i in index]
+      result.X_built = True
+    if self.y_built:
+      result.y = [self.y[i] for i in index]
+      result.w = [self.w[i] for i in index]
+      result.y_built = True
     return result
 
   def select_by_ID(self, IDs_selection):

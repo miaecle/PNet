@@ -83,7 +83,7 @@ class ConvNetContactMap(TensorGraph):
     # Placeholder for valid index
     self.res_flag_1D = Feature(shape=(None, None), dtype=tf.int32)
     self.res_flag_2D = Feature(shape=(None, None, None), dtype=tf.int32)
-    self.n_residues = Feature(shape=(None), dtype=tf.int32)
+    self.n_residues = Feature(shape=(None,), dtype=tf.int32)
 
     n_input = self.n_res_feat
     in_layer = self.res_features

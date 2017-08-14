@@ -68,7 +68,7 @@ class ResidueEmbedding(Layer):
 
     self.build()
     input_features = in_layers[0].out_tensor
-    embedded_features = tf.tensordot(input_features[:, :, self.pos_start:self.pos_end], self.embedding, [[2], [0]])
+    embedded_features = tf.tensordot(input_features[:, :, self.pos_start:self.pos_end], self.embedding, ([2], [0]))
     out_tensor = tf.concat([embedded_features, input_features[:, :, self.pos_end:]], axis=2)
     if set_tensors:
       self.variables = self.trainable_weights
@@ -241,7 +241,7 @@ class Outer1DTo2DLayer(Layer):
     tensor2 = tf.tile(tensor2, max_n_res2)
     out_tensor = tf.concat([tensor1, tensor2], axis=3)
 
-    if len(in_layers) > 1:
+    if len(in_layers) > 2:
       flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
     if set_tensors:
