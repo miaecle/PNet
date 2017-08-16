@@ -46,7 +46,7 @@ def initialization(shape, mode='glorot_normal', gpu=True, requires_grad=True):
   else:
     raise ValueError('Not supported mode')
   if gpu:
-    init = torch.cuda.FloatTensor(init)
+    init = torch.FloatTensor(init)
   if requires_grad:
     return torch.nn.Parameter(init)
   else:
@@ -57,7 +57,7 @@ class TorchResidueEmbedding(torch.nn.Module):
 
   def __init__(self,
                pos_start=0,
-               pos_end=23,
+               pos_end=25,
                embedding_length=50,
                **kwargs):
     """
@@ -136,7 +136,11 @@ class TorchResAdd(torch.nn.Module):
     pad_size = list(x.size())
     pad_length = fx_in_channels - x_in_channels
     pad_size[1] = pad_length
-    assert pad_length > 0
+    assert pad_length >= 0
 
-    out_tensor = fx + torch.cat([x, torch.zeros(pad_size)], 1)
+    if pad_length > 0:
+      padding = torch.autograd.Variable(torch.zeros(pad_size).cuda(), requires_grad=False)
+      out_tensor = fx + torch.cat([x, padding], 1)
+    else:
+      out_tensor = fx + x
     return out_tensor

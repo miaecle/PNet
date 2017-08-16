@@ -22,7 +22,7 @@ class ResidueEmbedding(Layer):
 
   def __init__(self,
                pos_start=0,
-               pos_end=23,
+               pos_end=25,
                embedding_length=50,
                init='glorot_uniform',
                activation='relu',

@@ -10,8 +10,8 @@ import numpy as np
 import pnet
 import os
 
-datasets = pnet.utils.load_CASP_all()
-data_dir = os.path.join(os.environ['PNET_DATA_DIR'], 'CASPALL')
+datasets = pnet.utils.load_PDB50()
+data_dir = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50ALL')
 datasets.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir)
 datasets.build_labels(path=data_dir, weight_adjust=30.)
 

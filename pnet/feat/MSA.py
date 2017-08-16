@@ -16,9 +16,9 @@ def generate_raw(dataset):
   """ Generate one hot feature for each residue """
   assert len(dataset.sequences) == 1
   sequences = [AminoAcid[res] for res in dataset.sequences[0]]
-  return np.reshape(to_one_hot(np.array(sequences), n_classes=23), (len(sequences), 23))
+  return np.reshape(to_one_hot(np.array(sequences), n_classes=25), (len(sequences), 25))
 
-def to_one_hot(y, n_classes=23):
+def to_one_hot(y, n_classes=25):
   """ Sparse to one hot """
   n_samples = np.shape(y)[0]
   y_hot = np.zeros((n_samples, n_classes))
@@ -36,7 +36,7 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload
   index = [i for i, res in enumerate(msa.master_sequence) if res != '-']
   sequences = np.transpose(np.array(sequences))[index, :]
   def to_one_hot(res):
-    result = np.zeros((23))
+    result = np.zeros((25))
     if res > 0:
       result[int(res)] = 1
     return result

@@ -17,6 +17,7 @@ class TorchModel(Model):
                n_tasks=1,
                learning_rate=.001,
                momentum=.9,
+               penalty=0.,
                optimizer="adam",
                batch_size=16,
                pad_batches=False,
@@ -44,6 +45,7 @@ class TorchModel(Model):
     self.n_tasks = n_tasks
     self.learning_rate = learning_rate
     self.momentum = momentum
+    self.penalty = penalty
     self.optimizer = optimizer
     self.batch_size = batch_size
     self.pad_batches = pad_batches
@@ -142,7 +144,7 @@ class TorchModel(Model):
       for variable in self.regularizaed_variables:
         loss += self.penalty * 0.5 * variable.mul(variable).sum()
     return loss
-    
+
   def predict(self, dataset):
     generator = self.default_generator(dataset, predict=True, pad_batches=False)
     return self.predict_on_generator(generator)

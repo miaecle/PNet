@@ -48,7 +48,7 @@ class ConvNetContactMap(TensorGraph):
     n_res_feat: int
       number of features for each residue
     embedding: bool, optional
-      whether to transfer the first 23 features(one hot encoding of residue
+      whether to transfer the first 25 features(one hot encoding of residue
       type) to variable embedding
     embedding_length: int, optional
       length of embedding
@@ -91,10 +91,11 @@ class ConvNetContactMap(TensorGraph):
       # Add embedding layer
       self.residues_embedding = ResidueEmbedding(
           pos_start=0,
-          pos_end=23,
+          pos_end=25,
           embedding_length=self.embedding_length,
           in_layers=[in_layer])
-      n_input = n_input - 23 + self.embedding_length
+
+      n_input = n_input - 25 + self.embedding_length
       in_layer = self.residues_embedding
     # Add 1D convolutional layers and batch normalization layers
     self.conv_1D_layers = []

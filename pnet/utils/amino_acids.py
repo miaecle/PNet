@@ -31,7 +31,8 @@ AminoAcid = {
     'V': 19,
     'B': 20,
     'Z': 21,
-    'X': 22
+    'X': 22,
+    'U': 23,
     }
 
 BLOSUM62 = np.array([

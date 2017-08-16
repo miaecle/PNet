@@ -11,16 +11,13 @@ import pnet
 import os
 
 datasets = pnet.utils.load_CASP_all()
-train, valid, test = datasets.train_valid_test_split(deterministic=True)
 data_dir = os.path.join(os.environ['PNET_DATA_DIR'], 'CASPALL')
-name_datasets = ['train', 'valid', 'test']
+datasets.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir)
+datasets.build_labels(path=data_dir, weight_adjust=30.)
 
-for i, dataset in enumerate([train, valid, test]):
-  path = os.path.join(data_dir, name_datasets[i])
-  dataset.build_features(['raw', 'MSA', 'SS', 'SA'], path=path)
-  dataset.build_labels(path=path, weight_adjust=30.)
+train, valid, test = datasets.train_valid_test_split(deterministic=True)
 
-batch_size = 2
+batch_size = 1
 n_features = train.n_features
 metrics = [dc.metrics.Metric(dc.metrics.roc_auc_score, np.mean, mode="classification")]
 

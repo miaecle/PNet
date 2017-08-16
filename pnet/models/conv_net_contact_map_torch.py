@@ -36,7 +36,7 @@ class ConvNetContactMapTorch(TorchModel):
     n_res_feat: int
       number of features for each residue
     embedding: bool, optional
-      whether to transfer the first 23 features(one hot encoding of residue
+      whether to transfer the first 25 features(one hot encoding of residue
       type) to variable embedding
     embedding_length: int, optional
       length of embedding
@@ -74,48 +74,67 @@ class ConvNetContactMapTorch(TorchModel):
     n_filter_2D = self.n_filter_2D
     if self.embedding:
       self.residue_embedding = TorchResidueEmbedding(embedding_length=self.embedding_length)
-      self.n_res_feat = self.n_res_feat - 23 + self.embedding_length
+      self.residue_embedding.cuda()
+      self.n_res_feat = self.n_res_feat - 25 + self.embedding_length
     self.conv1 = torch.nn.Conv1d(self.n_res_feat, 10, 1)
+    self.conv1.cuda()
     in_channels = 10
-    
+
     i = 0
     self.conv1d_modules = []
     while i < len(n_filter_1D):
       self.conv1d_modules.append(torch.nn.Sequential(
           torch.nn.ReLU(),
-          torch.nn.Conv1d(in_channels, n_filter_1D[i], filter_size_1D[i]),
+          torch.nn.Conv1d(in_channels,
+                          n_filter_1D[i],
+                          filter_size_1D[i],
+                          padding=(filter_size_1D[i]-1)//2),
           torch.nn.BatchNorm1d(n_filter_1D[i]),
           torch.nn.ReLU(),
-          torch.nn.Conv1d(n_filter_1D[i], n_filter_1D[i+1],filter_size_1D[i+1]),
+          torch.nn.Conv1d(n_filter_1D[i],
+                          n_filter_1D[i+1],filter_size_1D[i+1],
+                          padding=(filter_size_1D[i+1]-1)//2),
           torch.nn.BatchNorm1d(n_filter_1D[i+1])))
       in_channels = n_filter_1D[i+1]
       i = i + 2
-    
+    for module in self.conv1d_modules:
+      module.cuda()
+
     self.outer = TorchOuter()
     in_channels = 2 * in_channels
-    
+
     i = 0
     self.conv2d_modules = []
     while i < len(n_filter_2D):
       self.conv2d_modules.append(torch.nn.Sequential(
           torch.nn.ReLU(),
-          torch.nn.Conv2d(in_channels, n_filter_2D[i], filter_size_2D[i]),
+          torch.nn.Conv2d(in_channels,
+                          n_filter_2D[i],
+                          filter_size_2D[i],
+                          padding=(filter_size_2D[i]-1)//2),
           torch.nn.BatchNorm2d(n_filter_2D[i]),
           torch.nn.ReLU(),
-          torch.nn.Conv2d(n_filter_2D[i], n_filter_2D[i+1],filter_size_2D[i+1]),
+          torch.nn.Conv2d(n_filter_2D[i],
+                          n_filter_2D[i+1],
+                          filter_size_2D[i+1],
+                          padding=(filter_size_2D[i+1]-1)//2),
           torch.nn.BatchNorm2d(n_filter_2D[i+1])))
       in_channels = n_filter_2D[i+1]
       i = i + 2
-  
+    for module in self.conv2d_modules:
+      module.cuda()
+
     self.gather = TorchContactMapGather(in_channels)
+    self.gather.cuda()
     self.res_add = TorchResAdd()
-    
+
     self.trainable_layers.extend(self.conv1d_modules)
     self.trainable_layers.extend(self.conv2d_modules)
     self.trainable_layers.extend([self.residue_embedding, self.conv1, self.gather])
 
   def forward(self, inputs, training=False):
     X_batch = inputs[0]
+    print("batch of size" + str(X_batch.shape))
     X = torch.autograd.Variable(torch.cuda.FloatTensor(X_batch))
     flags_batch = inputs[1]
     flags = torch.autograd.Variable(torch.cuda.FloatTensor(flags_batch))
@@ -148,7 +167,7 @@ class ConvNetContactMapTorch(TorchModel):
 
   def predict_on_batch(self, inputs):
     y_pred_batch = self.forward(inputs, training=False)
-    y_pred_batch = y_pred_batch.data.cpu().numpy()[:]    
+    y_pred_batch = y_pred_batch.data.cpu().numpy()[:]
     return y_pred_batch
 
   def predict_proba_on_batch(self, X_batch):
@@ -169,7 +188,7 @@ class ConvNetContactMapTorch(TorchModel):
           labels = []
           for ids, label in enumerate(y_b):
             labels.append(label.flatten())
-          y_out = np.reshape(np.concatenate(labels, axis=0), [-1, 1])
+          y_out = np.reshape(np.concatenate(labels, axis=0), [-1, 1]).astype(float)
 
         if not w_b is None and not predict:
           weights = []
@@ -192,5 +211,4 @@ class ConvNetContactMapTorch(TorchModel):
         X_out = np.stack(res_features, axis=0)
         flags_out = np.stack(res_flag_2D, axis=0)
         yield [X_out, flags_out], y_out, w_out
-    
-    
+
