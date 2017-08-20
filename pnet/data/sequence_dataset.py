@@ -15,7 +15,7 @@ import pandas as pd
 import mdtraj as md
 import Bio
 import pnet
-import pickle
+import cPickle
 from Bio.PDB import PDBList
 
 def merge_datasets(datasets):
@@ -68,6 +68,8 @@ class SequenceDataset(object):
       self.load_structures()
     self.X_built = False
     self.y_built = False
+    self.X_on_disk = False
+    self.y_on_disk = False
 
   def load_structures(self, binary=False, threshold=0.8, weight_adjust=1.):
     """
@@ -107,7 +109,7 @@ class SequenceDataset(object):
           PDB_ID = self._IDs[i][:4]
           chain_ID = ord(self._IDs[i][4]) - ord('A')
           # fetch PDB from website
-          pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir)
+          pdbfile = pdbl.retrieve_pdb_file(PDB_ID, pdir=save_dir, file_format='pdb')
           t = md.load_pdb(pdbfile)
           chain = t.topology.chain(chain_ID)
 
@@ -343,15 +345,15 @@ class SequenceDataset(object):
       feat = pnet.feat.generate_raw
     return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
 
-  def build_features(self, feat_list, reload=True, path=None):
+  def build_features(self, feat_list, file_size=1000, reload=True, path=None):
     """ Build X based on specified list of features """
     if not path is None:
-      path = os.path.join(path, 'X.pkl')
-      if reload and os.path.exists(path):
-        with open(path, 'r') as f:
-          self.X = pickle.load(f)
-          self.X_built = True
-          return
+      path = os.path.join(path, 'X')
+      if reload and os.path.exists(path + '0.joblib'):
+        self.X = self.load_joblib(path)
+        self.X_built = True
+        self.X_on_disk = True
+        return
     if not feat_list.__class__ is list:
       feat_list = [feat_list]
     n_feats = len(feat_list)
@@ -359,8 +361,7 @@ class SequenceDataset(object):
     self.X = [np.concatenate([X[i][j] for i in range(n_feats)], axis=1) for j in range(self.n_samples)]
     self.X_built = True
     if reload and not path is None:
-      with open(path, 'w') as f:
-        pickle.dump(self.X, f)
+      self.save_joblib(self.X, path, file_size=file_size)
 
   @property
   def n_features(self):
@@ -369,17 +370,18 @@ class SequenceDataset(object):
     assert self.X_built, "X not built"
     return self.X[0].shape[1]
 
-  def build_labels(self, task='RR', binary=True, threshold=0.8, weight_adjust=1., reload=True, path=None):
+  def build_labels(self, task='RR', binary=True, threshold=0.8,
+                   weight_adjust=1., file_size = 100, reload=True, path=None):
     """ Build labels(y and w) for all samples """
     if not path is None:
-      path = os.path.join(path, 'yw.pkl')
-      if reload and os.path.exists(path):
-        with open(path, 'r') as f:
-          YW = pickle.load(f)
-          self.y = YW[0]
-          self.w = YW[1]
-          self.y_built = True
-          return
+      path_y = os.path.join(path, 'y')
+      path_w = os.path.join(path, 'w')
+      if reload and os.path.exists(path_y + '0.joblib') and os.path.exists(path_w + '0.joblib'):
+        self.y = self.load_joblib(path_y)
+        self.w = self.load_joblib(path_w)
+        self.y_built = True
+        self.y_on_disk = True
+        return
     if not self.load_pdb:
       self.load_structures(binary=binary,
                            threshold=threshold,
@@ -392,18 +394,39 @@ class SequenceDataset(object):
       self.w = [1 for i in range(self.n_samples)]
     self.y_built = True
     if reload and not path is None:
-      with open(path, 'w') as f:
-        pickle.dump([self.y, self.w], f)
+      self.save_joblib(self.y, path_y, file_size=file_size)
+      self.save_joblib(self.w, path_w, file_size=file_size)
+
+  def save_joblib(self, data, path, file_size=1000):
+    total_length = len(data)
+    file_num = total_length // file_size
+    for i in range(file_num):
+      path_save = path + str(i) + '.joblib'
+      data_save = data[i*file_size:(i+1)*file_size]
+      pnet.utils.save_to_joblib(data_save, path_save)
+    if file_num * file_size < total_length:
+      path_save = path + str(file_num) + '.joblib'
+      data_save = data[file_num*file_size:]
+      pnet.utils.save_to_joblib(data_save, path_save)
+
+  def load_joblib(self, path):
+    i = 0
+    files = []
+    while os.path.exists(path+str(i)+'.joblib'):
+      files.append(path+str(i)+'.joblib')
+      i = i + 1
+    return files
+
 
   def iterbatches(self,
                   batch_size=None,
-                  deterministic=False,
+                  deterministic=True,
                   pad_batches=False):
     """Object that iterates over minibatches from the dataset.
     """
     assert self.X_built, "Dataset not ready for training, features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
-    def iterate(dataset, batch_size, deterministic, pad_batches):
+    def iterate(dataset, batch_size, deterministic=True, pad_batches=False, on_disk=True):
       n_samples = dataset.get_num_samples()
       if not deterministic:
         sample_perm = np.random.permutation(n_samples)
@@ -413,16 +436,51 @@ class SequenceDataset(object):
         batch_size = n_samples
       interval_points = np.arange(np.ceil(float(n_samples) / batch_size) + 1) * batch_size
       interval_points[-1] = n_samples
+      if on_disk:
+        current_X = 0
+        current_y = 0
+        current_w = 0
+        current_X_file = 0
+        current_y_file = 0
+        current_w_file = 0
+        X_all = []
+        y_all = []
+        w_all = []
+
       for j in range(len(interval_points) - 1):
         indices = range(int(interval_points[j]), int(interval_points[j + 1]))
         perm_indices = sample_perm[indices]
-        out_X = [dataset.X[i] for i in perm_indices]
-        out_y = [dataset.y[i] for i in perm_indices]
-        out_w = [dataset.w[i] for i in perm_indices]
+        if not on_disk:
+          out_X = [dataset.X[i] for i in perm_indices]
+          out_y = [dataset.y[i] for i in perm_indices]
+          out_w = [dataset.w[i] for i in perm_indices]
+        else:
+          assert deterministic, 'Only support index order'
+          index_end = max(perm_indices)
+          while current_X <= index_end:
+            X_new = pnet.utils.load_from_joblib(self.X[current_X_file])
+            current_X_file = current_X_file + 1
+            current_X = current_X + len(X_new)
+            X_all.extend(X_new)
+          while current_y <= index_end:
+            y_new = pnet.utils.load_from_joblib(self.y[current_y_file])
+            current_y_file = current_y_file + 1
+            current_y = current_y + len(y_new)
+            y_all.extend(y_new)
+          while current_w <= index_end:
+            w_new = pnet.utils.load_from_joblib(self.w[current_w_file])
+            current_w_file = current_w_file + 1
+            current_w = current_w + len(w_new)
+            w_all.extend(w_new)
+          out_X = [X_all[i] for i in perm_indices]
+          out_y = [y_all[i] for i in perm_indices]
+          out_w = [w_all[i] for i in perm_indices]
+
         if pad_batches:
           out_X, out_y, out_w = dataset.pad_batch(batch_size, out_X, out_y, out_w, dataset.n_features)
         yield out_X, out_y, out_w
-    return iterate(self, batch_size, deterministic, pad_batches)
+    assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
+    return iterate(self, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
 
   @staticmethod
   def pad_batch(batch_size, X, y, w, n_features):
@@ -444,11 +502,41 @@ class SequenceDataset(object):
     """
     assert self.X_built, "Dataset not ready for training, features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
-    def sample_iterate(dataset):
+    def sample_iterate(dataset, on_disk=True):
       n_samples = dataset.get_num_samples()
+      if on_disk:
+        current_X = 0
+        current_y = 0
+        current_w = 0
+        current_X_file = 0
+        current_y_file = 0
+        current_w_file = 0
+        X_all = []
+        y_all = []
+        w_all = []
+
       for i in range(n_samples):
-        yield self.X[i], self.y[i], self.w[i]
-    return sample_iterate(self)
+        if not on_disk:
+          yield self.X[i], self.y[i], self.w[i]
+        else:
+          while current_X <= i:
+            X_new = pnet.utils.load_from_joblib(self.X[current_X_file])
+            current_X_file = current_X_file + 1
+            current_X = current_X + len(X_new)
+            X_all.extend(X_new)
+          while current_y <= i:
+            y_new = pnet.utils.load_from_joblib(self.y[current_y_file])
+            current_y_file = current_y_file + 1
+            current_y = current_y + len(y_new)
+            y_all.extend(y_new)
+          while current_w <= i:
+            w_new = pnet.utils.load_from_joblib(self.w[current_w_file])
+            current_w_file = current_w_file + 1
+            current_w = current_w + len(w_new)
+            w_all.extend(w_new)
+          yield X_all[i], y_all[i], w_all[i]
+    assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
+    return sample_iterate(self, on_disk=self.X_on_disk)
 
   def train_valid_test_split(self,
                              deterministic=False,

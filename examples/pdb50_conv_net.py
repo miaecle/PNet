@@ -28,7 +28,7 @@ model = pnet.models.ConvNetContactMap(
     use_queue=False,
     mode='classification')
 
-model.fit(train, nb_epoch=200, checkpoint_interval=20)
+model.fit(train, nb_epoch=20, checkpoint_interval=20)
 
 train_scores = model.evaluate(train, metrics)
 print(train_scores)

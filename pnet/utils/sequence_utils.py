@@ -9,6 +9,7 @@ Created on Mon Jun  5 13:40:00 2017
 import os
 import pandas as pd
 import numpy as np
+import joblib
 from pnet.data import SequenceDataset
 from pnet.data import merge_datasets
 
@@ -110,3 +111,12 @@ def write_sequence(sequences, path):
     for i in range(num_samples):
       f.writelines(['>'+'TEMP'+str(i%10)+'\n', sequences[i] + '\n'])
       f.writelines(['\n', '\n'])
+
+
+def save_to_joblib(data, path, compress=3):
+  """ Save data to a joblib file """
+  joblib.dump(data, path, compress=compress)
+
+def load_from_joblib(path):
+  """ Save data to a joblib file """
+  return joblib.load(path)
