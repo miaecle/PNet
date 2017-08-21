@@ -317,11 +317,20 @@ class SequenceDataset(object):
       result.RR_weights = [self.RR_weights[i] for i in index]
       result.load_pdb = True
     if self.X_built:
-      result.X = [self.X[i] for i in index]
+      if self.X_on_disk:
+        result.X = self.pick_Xyw(index, self.X, identifier='X')
+        result.X_on_disk = True
+      else:
+        result.X = [self.X[i] for i in index]
       result.X_built = True
     if self.y_built:
-      result.y = [self.y[i] for i in index]
-      result.w = [self.w[i] for i in index]
+      if self.y_on_disk:
+        result.y = self.pick_Xyw(index, self.y, identifier='y')
+        result.w = self.pick_Xyw(index, self.w, identifier='w')
+        result.y_on_disk = True
+      else:
+        result.y = [self.y[i] for i in index]
+        result.w = [self.w[i] for i in index]
       result.y_built = True
     return result
 
@@ -368,7 +377,11 @@ class SequenceDataset(object):
     """ Return number of features for each sample,
     can only be called after building X """
     assert self.X_built, "X not built"
-    return self.X[0].shape[1]
+    if self.X_on_disk:
+      X_samp = pnet.utils.load_from_joblib(self.X[0])
+      return X_samp[0].shape[1]
+    else:
+      return self.X[0].shape[1]
 
   def build_labels(self, task='RR', binary=True, threshold=0.8,
                    weight_adjust=1., file_size = 100, reload=True, path=None):
@@ -536,6 +549,21 @@ class SequenceDataset(object):
       print("Reordering to %s" % paths[i])
       dataset.save_joblib(new_order, paths[i], file_size=file_size[0])
     return dataset.load_joblib(paths[0]), dataset.load_joblib(paths[1]), dataset.load_joblib(paths[2])
+
+  def pick_Xyw(self, sample_perm, data_list, path=None, identifier='X'):
+    """ Reordering the X, y, w in the dataset according to sample_perm
+    """
+    if path is None:
+      path = tempfile.mkdtemp()
+      path = os.path.join(path, identifier)
+    index_order = []
+    file_size = []
+    for orig_path in data_list:
+      index_order.extend(pnet.utils.load_from_joblib(orig_path))
+      file_size.append(len(index_order))
+    new_order = [index_order[j] for j in sample_perm]
+    self.save_joblib(new_order, path, file_size=file_size[0])
+    return self.load_joblib(path)
 
   def itersamples(self):
     """Object that iterates over the samples in the dataset.
