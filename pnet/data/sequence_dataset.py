@@ -15,7 +15,7 @@ import pandas as pd
 import mdtraj as md
 import Bio
 import pnet
-import cPickle
+import tempfile
 from Bio.PDB import PDBList
 
 def merge_datasets(datasets):
@@ -397,7 +397,8 @@ class SequenceDataset(object):
       self.save_joblib(self.y, path_y, file_size=file_size)
       self.save_joblib(self.w, path_w, file_size=file_size)
 
-  def save_joblib(self, data, path, file_size=1000):
+  @staticmethod
+  def save_joblib(data, path, file_size=1000):
     total_length = len(data)
     file_num = total_length // file_size
     for i in range(file_num):
@@ -409,7 +410,8 @@ class SequenceDataset(object):
       data_save = data[file_num*file_size:]
       pnet.utils.save_to_joblib(data_save, path_save)
 
-  def load_joblib(self, path):
+  @staticmethod
+  def load_joblib(path):
     i = 0
     files = []
     while os.path.exists(path+str(i)+'.joblib'):
@@ -421,7 +423,8 @@ class SequenceDataset(object):
   def iterbatches(self,
                   batch_size=None,
                   deterministic=True,
-                  pad_batches=False):
+                  pad_batches=False,
+                  save_path=None):
     """Object that iterates over minibatches from the dataset.
     """
     assert self.X_built, "Dataset not ready for training, features must be built"
@@ -437,44 +440,58 @@ class SequenceDataset(object):
       interval_points = np.arange(np.ceil(float(n_samples) / batch_size) + 1) * batch_size
       interval_points[-1] = n_samples
       if on_disk:
-        current_X = 0
-        current_y = 0
-        current_w = 0
-        current_X_file = 0
-        current_y_file = 0
-        current_w_file = 0
+        current_end = [0, 0, 0]
+        current_start = [0, 0, 0]
+        current_files = [0, 0, 0]
+        file_sizes = [1000, 500, 500]
+        assert batch_size < min(file_sizes)
         X_all = []
         y_all = []
         w_all = []
+        if not deterministic:
+          X, y, w = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path)
+          sample_perm = np.arange(n_samples)
+          deterministic = True
+        else:
+          X, y, w = dataset.X, dataset.y, dataset.w
 
       for j in range(len(interval_points) - 1):
         indices = range(int(interval_points[j]), int(interval_points[j + 1]))
         perm_indices = sample_perm[indices]
         if not on_disk:
-          out_X = [dataset.X[i] for i in perm_indices]
-          out_y = [dataset.y[i] for i in perm_indices]
-          out_w = [dataset.w[i] for i in perm_indices]
+          out_X = [X[i] for i in perm_indices]
+          out_y = [y[i] for i in perm_indices]
+          out_w = [w[i] for i in perm_indices]
         else:
           assert deterministic, 'Only support index order'
           index_end = max(perm_indices)
-          while current_X <= index_end:
-            X_new = pnet.utils.load_from_joblib(self.X[current_X_file])
-            current_X_file = current_X_file + 1
-            current_X = current_X + len(X_new)
+          while current_end[0] <= index_end:
+            X_new = pnet.utils.load_from_joblib(X[current_files[0]])
+            current_files[0] = current_files[0] + 1
+            current_end[0] = current_end[0] + len(X_new)
             X_all.extend(X_new)
-          while current_y <= index_end:
-            y_new = pnet.utils.load_from_joblib(self.y[current_y_file])
-            current_y_file = current_y_file + 1
-            current_y = current_y + len(y_new)
+            if len(X_all) > 2*file_sizes[0]:
+              del X_all[0:file_sizes[0]]
+              current_start[0] = current_start[0] + file_sizes[0]
+          while current_end[1] <= index_end:
+            y_new = pnet.utils.load_from_joblib(y[current_files[1]])
+            current_files[1] = current_files[1] + 1
+            current_end[1] = current_end[1] + len(y_new)
             y_all.extend(y_new)
-          while current_w <= index_end:
-            w_new = pnet.utils.load_from_joblib(self.w[current_w_file])
-            current_w_file = current_w_file + 1
-            current_w = current_w + len(w_new)
+            if len(y_all) > 2*file_sizes[1]:
+              del y_all[0:file_sizes[1]]
+              current_start[1] = current_start[1] + file_sizes[1]
+          while current_end[2] <= index_end:
+            w_new = pnet.utils.load_from_joblib(w[current_files[2]])
+            current_files[2] = current_files[2] + 1
+            current_end[2] = current_end[2] + len(w_new)
             w_all.extend(w_new)
-          out_X = [X_all[i] for i in perm_indices]
-          out_y = [y_all[i] for i in perm_indices]
-          out_w = [w_all[i] for i in perm_indices]
+            if len(w_all) > 2*file_sizes[2]:
+              del w_all[0:file_sizes[2]]
+              current_start[2] = current_start[2] + file_sizes[2]
+          out_X = [X_all[i - current_start[0]] for i in perm_indices]
+          out_y = [y_all[i - current_start[1]] for i in perm_indices]
+          out_w = [w_all[i - current_start[2]] for i in perm_indices]
 
         if pad_batches:
           out_X, out_y, out_w = dataset.pad_batch(batch_size, out_X, out_y, out_w, dataset.n_features)
@@ -496,6 +513,29 @@ class SequenceDataset(object):
         y.extend([np.zeros((2, 2))] * (batch_size - num_samples))
       w.extend([np.zeros((2, 2))] * (batch_size - num_samples))
     return X, y, w
+
+  @staticmethod
+  def reorder_Xyw(sample_perm, dataset, path=None):
+    """ Reordering the X, y, w in the dataset according to sample_perm
+    """
+    assert dataset.X_on_disk
+    assert dataset.y_on_disk
+    if path is None:
+      path = tempfile.mkdtemp()
+      paths = [os.path.join(path, 'X'),
+               os.path.join(path, 'y'),
+               os.path.join(path, 'w')]
+    for i, original_paths in enumerate([dataset.X, dataset.y, dataset.w]):
+      index_order = []
+      file_size = []
+      for orig_path in original_paths:
+        index_order.extend(pnet.utils.load_from_joblib(orig_path))
+        file_size.append(len(index_order))
+      assert file_size[-1] == dataset.get_num_samples()
+      new_order = [index_order[j] for j in sample_perm]
+      print("Reordering to %s" % paths[i])
+      dataset.save_joblib(new_order, paths[i], file_size=file_size[0])
+    return dataset.load_joblib(paths[0]), dataset.load_joblib(paths[1]), dataset.load_joblib(paths[2])
 
   def itersamples(self):
     """Object that iterates over the samples in the dataset.
