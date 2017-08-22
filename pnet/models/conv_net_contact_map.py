@@ -224,8 +224,9 @@ class ConvNetContactMap(TensorGraph):
     Parameters
     """
     w_all = []
-    for w_sample in dataset.w:
-      w_sample = np.sign(w_sample)
+    y_all = []
+    for X, y, w in dataset.itersamples():
+      w_sample = np.sign(w)
       n_residues = w_sample.shape[0]
       full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
                    np.stack([np.arange(n_residues)] * n_residues, axis=1))
@@ -233,11 +234,12 @@ class ConvNetContactMap(TensorGraph):
       range_medium = ((23 - full_range ) >= 0).astype(float) * ((full_range - 12 ) >= 0).astype(float)  * w_sample
       range_long = ((full_range - 24 ) >= 0).astype(float) * w_sample
       w_all.append(np.stack([range_short.flatten(), range_medium.flatten(), range_long.flatten()], 1))
+      y_all.append(y.flatten())
 
     w = np.concatenate(w_all, axis=0)
     # Retrieve prediction and true label
     y_pred = self.predict_proba(dataset)
-    y = np.concatenate([y_sample.flatten() for y_sample in dataset.y])*1
+    y = np.concatenate(y_all)*1
     # Mask all predictions and labels with valid index
     results = [{}, {}, {}]
     for i in range(3):

@@ -212,3 +212,34 @@ class ConvNetContactMapTorch(TorchModel):
         flags_out = np.stack(res_flag_2D, axis=0)
         yield [X_out, flags_out], y_out, w_out
 
+  def evaluate(self, dataset, metrics):
+    """
+    Evaluates the performance of this model on specified dataset.
+    Parameters
+    """
+    w_all = []
+    y_all = []
+    for X, y, w in dataset.itersamples():
+      w_sample = np.sign(w)
+      n_residues = w_sample.shape[0]
+      full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
+                   np.stack([np.arange(n_residues)] * n_residues, axis=1))
+      range_short = ((11 - full_range ) >= 0).astype(float) * ((full_range - 6 ) >= 0).astype(float) * w_sample
+      range_medium = ((23 - full_range ) >= 0).astype(float) * ((full_range - 12 ) >= 0).astype(float)  * w_sample
+      range_long = ((full_range - 24 ) >= 0).astype(float) * w_sample
+      w_all.append(np.stack([range_short.flatten(), range_medium.flatten(), range_long.flatten()], 1))
+      y_all.append(y.flatten())
+
+    w = np.concatenate(w_all, axis=0)
+    # Retrieve prediction and true label
+    y_pred = self.predict_proba(dataset)
+    y = np.concatenate(y_all)*1
+    # Mask all predictions and labels with valid index
+    results = [{}, {}, {}]
+    for i in range(3):
+      y_eval = y_pred[np.nonzero(w[:, i])]
+      y_true = y[np.nonzero(w[:, i])]
+      # Calculate performances
+      for metric in metrics:
+        results[i][metric.name] = metric.compute_metric(y_true, y_eval)
+    return results
