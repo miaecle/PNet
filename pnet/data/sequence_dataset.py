@@ -357,6 +357,7 @@ class SequenceDataset(object):
   def build_features(self, feat_list, file_size=1000, reload=True, path=None):
     """ Build X based on specified list of features """
     if not path is None:
+      path = os.path.join(path, '_'.join(feat_list))
       path = os.path.join(path, 'X')
       if reload and os.path.exists(path + '0.joblib'):
         self.X = self.load_joblib(path)
@@ -387,6 +388,8 @@ class SequenceDataset(object):
                    weight_adjust=1., file_size = 100, reload=True, path=None):
     """ Build labels(y and w) for all samples """
     if not path is None:
+      if binary:
+        path = os.path.join(path, 'binary'+str(threshold))
       path_y = os.path.join(path, 'y')
       path_w = os.path.join(path, 'w')
       if reload and os.path.exists(path_y + '0.joblib') and os.path.exists(path_w + '0.joblib'):

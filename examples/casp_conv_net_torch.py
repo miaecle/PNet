@@ -19,7 +19,7 @@ train, valid, test = datasets.train_valid_test_split(deterministic=True)
 
 batch_size = 1
 n_features = train.n_features
-metrics = [dc.metrics.Metric(dc.metrics.roc_auc_score, np.mean, mode="classification")]
+metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5), mode='classification')]
 
 model = pnet.models.ConvNetContactMapTorch(
     n_res_feat=n_features,
