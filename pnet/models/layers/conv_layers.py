@@ -26,7 +26,6 @@ class ResidueEmbedding(Layer):
                embedding_length=50,
                init='glorot_uniform',
                activation='relu',
-               dropout=None,
                **kwargs):
     """
     Parameters
@@ -41,9 +40,6 @@ class ResidueEmbedding(Layer):
       Weight initialization for filters.
     activation: str, optional
       Activation function applied
-    dropout: float, optional
-      Dropout probability, not supported here
-
     """
     self.init = initializations.get(init)  # Set weight initialization
     self.activation = activations.get(activation)  # Get activations
@@ -53,9 +49,6 @@ class ResidueEmbedding(Layer):
     super(ResidueEmbedding, self).__init__(**kwargs)
 
   def build(self):
-    """ Construct internal trainable weights.
-    """
-
     self.embedding = self.init([self.pos_end - self.pos_start, self.embedding_length])
     self.trainable_weights = [self.embedding]
 
@@ -68,7 +61,14 @@ class ResidueEmbedding(Layer):
 
     self.build()
     input_features = in_layers[0].out_tensor
-    embedded_features = tf.tensordot(input_features[:, :, self.pos_start:self.pos_end], self.embedding, ([2], [0]))
+
+    i = tf.shape(input_features)[0]
+    j = tf.shape(input_features)[1]
+    embedded_features = tf.reshape(tf.matmul(tf.reshape(input_features[:, :, self.pos_start:self.pos_end],
+                                                        [i*j, self.pos_end - self.pos_start]),
+                                             self.embedding),
+                                   [i, j, self.embedding_length])
+
     out_tensor = tf.concat([embedded_features, input_features[:, :, self.pos_end:]], axis=2)
     if set_tensors:
       self.variables = self.trainable_weights
@@ -84,7 +84,6 @@ class Conv1DLayer(Layer):
                init='glorot_uniform',
                activation='relu',
                activation_first=True,
-               dropout=None,
                **kwargs):
     """
     Parameters
@@ -99,8 +98,8 @@ class Conv1DLayer(Layer):
       Weight initialization for filters.
     activation: str, optional
       Activation function applied
-    dropout: float, optional
-      Dropout probability, not supported here
+    activation_first: bool, optional
+      If to apply activation before convolution
 
     """
     self.init = initializations.get(init)  # Set weight initialization
@@ -112,9 +111,6 @@ class Conv1DLayer(Layer):
     super(Conv1DLayer, self).__init__(**kwargs)
 
   def build(self):
-    """ Construct internal trainable weights.
-    """
-
     self.W = self.init([self.n_size, self.n_input_feat, self.n_output_feat])
     self.b = model_ops.zeros((self.n_output_feat,))
     self.trainable_weights = [self.W, self.b]
@@ -144,6 +140,80 @@ class Conv1DLayer(Layer):
     return out_tensor
 
 
+class Conv1DAtrous(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size,
+               rate,
+               init='glorot_uniform',
+               activation='relu',
+               activation_first=True,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels
+    n_size: int
+      Number of filter size(full length)
+    rate: int
+      Rate of atrous convolution
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    activation_first: bool, optional
+      If to apply activation before convolution
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.activation_first = activation_first # If to switch the order of convolution and activation
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    self.rate = rate
+    super(Conv1DAtrous, self).__init__(**kwargs)
+
+  def build(self):
+    self.W_effective = self.init([self.n_size, self.n_input_feat, self.n_output_feat])
+    self.W = []
+    for i in range(self.n_size):
+      self.W.append(self.W_effective[i:i+1, :, :])
+      if i < self.n_size - 1:
+        self.W.append(tf.Variable(tf.zeros((self.rate-1, self.n_input_feat, self.n_output_feat)), trainable=False))
+    self.W = tf.concat(self.W, 0)
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    self.build()
+
+    input_features = in_layers[0].out_tensor
+    if self.activation_first:
+      input_features = self.activation(input_features)
+    out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
+    if len(in_layers) > 1:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
+      out_tensor = out_tensor * tf.to_float(flag)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+
+
 class Conv2DLayer(Layer):
 
   def __init__(self,
@@ -153,7 +223,6 @@ class Conv2DLayer(Layer):
                init='glorot_uniform',
                activation='relu',
                activation_first=True,
-               dropout=None,
                **kwargs):
     """
     Parameters
@@ -168,8 +237,8 @@ class Conv2DLayer(Layer):
       Weight initialization for filters.
     activation: str, optional
       Activation function applied
-    dropout: float, optional
-      Dropout probability, not supported here
+    activation_first: bool, optional
+      If to apply activation before convolution
 
     """
     self.init = initializations.get(init)  # Set weight initialization
@@ -181,9 +250,6 @@ class Conv2DLayer(Layer):
     super(Conv2DLayer, self).__init__(**kwargs)
 
   def build(self):
-    """ Construct internal trainable weights.
-    """
-
     self.W = self.init([self.n_size, self.n_size, self.n_input_feat, self.n_output_feat])
     self.b = model_ops.zeros((self.n_output_feat,))
     self.trainable_weights = [self.W, self.b]
@@ -212,6 +278,78 @@ class Conv2DLayer(Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
+class Conv2DAtrous(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size,
+               rate,
+               init='glorot_uniform',
+               activation='relu',
+               activation_first=True,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels
+    n_size: int
+      Number of filter size(full length)
+    rate: int
+      Rate of atrous convolution
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    activation_first: bool, optional
+      If to apply activation before convolution
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    self.rate = rate
+    self.activation_first = activation_first
+    super(Conv2DAtrous, self).__init__(**kwargs)
+
+  def build(self):
+    self.W = self.init([self.n_size, self.n_size, self.n_output_feat, self.n_input_feat])
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, output_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+
+    input_features = in_layers[0].out_tensor
+
+    if self.activation_first:
+      input_features = self.activation(input_features)
+    out_tensor = tf.nn.atrous_conv2d(input_features,
+                                     self.W,
+                                     rate=self.rate,
+                                     padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
+    if len(in_layers) > 1:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      out_tensor = out_tensor * tf.to_float(flag)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+
 class Outer1DTo2DLayer(Layer):
 
   def __init__(self,
@@ -219,8 +357,6 @@ class Outer1DTo2DLayer(Layer):
     super(Outer1DTo2DLayer, self).__init__(**kwargs)
 
   def build(self):
-    """ Construct internal trainable weights.
-    """
     self.trainable_weights = []
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
@@ -253,19 +389,33 @@ class ContactMapGather(Layer):
 
   def __init__(self,
                n_input_feat,
+               n_output=2,
                init='glorot_uniform',
                activation='relu',
                **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output: int, optional
+      Number of output channels: 2 for classification, 1 for regression
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+
+    """
+
     self.n_input_feat = n_input_feat
+    self.n_output = n_output
     self.init = initializations.get(init)  # Set weight initialization
     self.activation = activations.get(activation)  # Get activations
     super(ContactMapGather, self).__init__(**kwargs)
 
   def build(self):
-    """ Construct internal trainable weights.
-    """
-    self.W = self.init([self.n_input_feat, 2])
-    self.b = model_ops.zeros(shape=[2])
+    self.W = self.init([self.n_input_feat, self.n_output])
+    self.b = model_ops.zeros(shape=[self.n_output])
     self.trainable_weights = [self.W, self.b]
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
@@ -276,9 +426,10 @@ class ContactMapGather(Layer):
     in_layers = convert_to_layers(in_layers)
     self.build()
     input_features = in_layers[0].out_tensor
-    input_features = tf.reshape(input_features, shape=[-1, self.n_input_feat])
+    input_features = self.activation(input_features)
+    input_features = (input_features + tf.transpose(input_features, perm=[0, 2, 1, 3])) / 2
     if len(in_layers) > 1:
-      flag = tf.cast(tf.reshape(in_layers[1].out_tensor, [-1]), dtype=tf.bool)
+      flag = tf.cast(in_layers[1].out_tensor, dtype=tf.bool)
       out_tensor = tf.boolean_mask(input_features, flag)
     out_tensor = tf.nn.xw_plus_b(out_tensor, self.W, self.b)
     if set_tensors:
@@ -292,6 +443,15 @@ class ResAdd(Layer):
                fx_in_channels=None,
                x_in_channels=None,
                **kwargs):
+    """
+    Parameters
+    ----------
+    fx_in_channels: int(or None), optional
+      Number of channels for fx: automatically defined if None
+    x_in_channels: int(or None), optional
+      Number of channels for x: automatically defined if None
+
+    """
     self.fx_in_channels = fx_in_channels
     self.x_in_channels = x_in_channels
     super(ResAdd, self).__init__(**kwargs)
@@ -313,10 +473,109 @@ class ResAdd(Layer):
       self.x_in_channels = x.get_shape().as_list()[-1]
 
     pad_length = self.fx_in_channels - self.x_in_channels
+    assert pad_length >= 0
 
     pad = [[0,0]] * pad_dimension + [[0, pad_length]]
     out_tensor = fx + tf.pad(x, pad, "CONSTANT")
     if set_tensors:
       self.variables = None
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class Conv2DPool(Layer):
+
+  def __init__(self,
+               n_size=2,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_size: int
+      Number of filter size(full length)
+
+    """
+    self.n_size = n_size
+    super(Conv2DPool, self).__init__(**kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    input_features = in_layers[0].out_tensor
+    out_tensor = tf.nn.max_pool(input_features, [1, self.n_size, self.n_size, 1],
+                                strides=[1, self.n_size, self.n_size, 1], padding='VALID')
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class Conv2DUp(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size,
+               init='glorot_uniform',
+               activation='relu',
+               activation_first=True,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels
+    n_size: int
+      Number of filter size(full length)
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    activation_first: bool, optional
+      If to apply activation before convolution
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    self.activation_first = activation_first
+    super(Conv2DUp, self).__init__(**kwargs)
+
+  def build(self):
+    self.W = self.init([self.n_size, self.n_size, self.n_output_feat, self.n_input_feat])
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, output_shape, output_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+
+    input_features = in_layers[0].out_tensor
+    out_shape = in_layers[1].out_tensor
+
+    if self.activation_first:
+      input_features = self.activation(input_features)
+    out_tensor = tf.nn.conv2d_transpose(input_features,
+                                        self.W,
+                                        out_shape,
+                                        strides=[1, self.n_size, self.n_size, 1],
+                                        padding='VALID')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
+      out_tensor = out_tensor * tf.to_float(flag)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
+    if set_tensors:
+      self.variables = self.trainable_weights
       self.out_tensor = out_tensor
     return out_tensor

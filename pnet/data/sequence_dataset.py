@@ -158,7 +158,10 @@ class SequenceDataset(object):
           full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
               np.stack([np.arange(n_residues)] * n_residues, axis=1))
           RR_weight = RR_weight * ((full_range - 6 ) >= 0).astype(float)
-
+        else:
+          full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
+              np.stack([np.arange(n_residues)] * n_residues, axis=1))
+          RR_weight = RR_weight * (1 + full_range * ((full_range - 6 ) >= 0) * weight_adjust)
         ts.append(t)
         resseqs.append(resseq)
         xyz.append(coordinate)
@@ -390,6 +393,8 @@ class SequenceDataset(object):
     if not path is None:
       if binary:
         path = os.path.join(path, 'binary'+str(threshold))
+      else:
+        path = os.path.join(path, 'continuous')
       path_y = os.path.join(path, 'y')
       path_w = os.path.join(path, 'w')
       if reload and os.path.exists(path_y + '0.joblib') and os.path.exists(path_w + '0.joblib'):
@@ -412,6 +417,9 @@ class SequenceDataset(object):
     if reload and not path is None:
       self.save_joblib(self.y, path_y, file_size=file_size)
       self.save_joblib(self.w, path_w, file_size=file_size)
+      self.y = self.load_joblib(path_y)
+      self.w = self.load_joblib(path_w)
+      self.y_on_disk = True
 
   @staticmethod
   def save_joblib(data, path, file_size=1000):
