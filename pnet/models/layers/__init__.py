@@ -1,6 +1,7 @@
 from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
     Conv1DAtrous, Conv2DAtrous
+from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer
 from conv_layers_torch import TorchResidueEmbedding, TorchOuter, TorchContactMapGather, TorchResAdd
 import deepchem
 import tensorflow as tf
