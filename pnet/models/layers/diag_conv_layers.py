@@ -174,7 +174,7 @@ class DiagConv2DAtrous(Layer):
     out_tensor = tf.nn.atrous_conv2d(input_features,
                                      self.W,
                                      rate=self.rate,
-                                     padding='VALID')
+                                     padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)

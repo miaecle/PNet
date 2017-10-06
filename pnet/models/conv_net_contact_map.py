@@ -106,8 +106,8 @@ class ConvNetContactMapBase(TensorGraph):
       self.contact_labels = Label(shape=(None, 1))
       self.contact_weights = Weights(shape=(None, 1))
       cost = L2Loss(in_layers=[self.contact_labels, self.gather_out_layer])
-    all_loss = WeightedError(in_layers=[cost, self.contact_weights])
-    self.set_loss(all_loss)
+    self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights])
+    self.set_loss(self.cost_balanced)
     return
 
   def default_generator(self,

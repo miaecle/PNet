@@ -318,7 +318,7 @@ class Conv2DAtrous(Layer):
     super(Conv2DAtrous, self).__init__(**kwargs)
 
   def build(self):
-    self.W = self.init([self.n_size, self.n_size, self.n_output_feat, self.n_input_feat])
+    self.W = self.init([self.n_size, self.n_size, self.n_input_feat, self.n_output_feat])
     self.b = model_ops.zeros((self.n_output_feat,))
     self.trainable_weights = [self.W, self.b]
 
@@ -506,7 +506,7 @@ class Conv2DPool(Layer):
 
     input_features = in_layers[0].out_tensor
     out_tensor = tf.nn.max_pool(input_features, [1, self.n_size, self.n_size, 1],
-                                strides=[1, self.n_size, self.n_size, 1], padding='VALID')
+                                strides=[1, self.n_size, self.n_size, 1], padding='SAME')
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
@@ -568,7 +568,7 @@ class Conv2DUp(Layer):
                                         self.W,
                                         out_shape,
                                         strides=[1, self.n_size, self.n_size, 1],
-                                        padding='VALID')
+                                        padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
     if len(in_layers) > 2:
       flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
@@ -577,5 +577,38 @@ class Conv2DUp(Layer):
       out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class Conv2DBilinearUp(Layer):
+
+  def __init__(self,
+               uppertri=False,
+               **kwargs):
+    self.uppertri = uppertri
+    super(Conv2DBilinearUp, self).__init__(**kwargs)
+    
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, output_shape, output_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    input_features = in_layers[0].out_tensor
+    if self.uppertri:
+      diag_elems = tf.transpose(tf.matrix_band_part(tf.transpose(input_features, 
+                                                                 perm=[0,3,1,2]),
+                                                    0, 0), 
+                                perm=[0,2,3,1])
+      input_features = input_features + tf.transpose(input_features, perm=[0,2,1,3]) - diag_elems
+    
+    out_shape = in_layers[1].out_tensor
+    out_tensor = tf.image.resize_bilinear(input_features, out_shape[1:3])
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
+      out_tensor = out_tensor * tf.to_float(flag)
+      
+    if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor

@@ -23,6 +23,11 @@ class AtrousConvContactMap(ConvNetContactMapBase):
                n_filter_1D=[20]*4,
                filter_size_atrous_1D=[3]*4,
                n_filter_atrous_1D=[20]*4,
+               n_pool_layers=2,
+               filter_size_2D=3,
+               init_n_filter=64,
+               filter_size_atrous_2D=3,
+               n_atrous=4,
                **kwargs):
     """
     Parameters:
@@ -31,6 +36,10 @@ class AtrousConvContactMap(ConvNetContactMapBase):
       structure of 1D convolution: size of convolution
     n_filter_1D: list, optional
       structure of 1D convolution: depths of convolution
+    filter_size_atrous_1D: list, optional
+      structure of atrous 1D convolution: size of convolution
+    n_filter_atrous_1D: list, optional
+      structure of atrous 1D convolution: depths of convolution
     n_pool_layers: int, optional
       number of blocks(pooling layer) in the Conv2DModule
     filter_size_2D: int, optional
@@ -38,6 +47,10 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     init_n_filter: int, optional
       number of filters for the first Conv2D block
       after each pooling layer, n_filter is doubled
+    filter_size_atrous_2D: int, optional
+      size of filter for Conv2DAtrous
+    n_atrous: int, optional
+      number of atrous layers: rate increase from 2, 4, 8, ...
     """
     self.filter_size_1D = filter_size_1D
     self.n_filter_1D = n_filter_1D
@@ -45,6 +58,11 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     self.filter_size_atrous_1D = filter_size_atrous_1D
     self.n_filter_atrous_1D = n_filter_atrous_1D
     assert len(n_filter_atrous_1D) == len(filter_size_atrous_1D)
+    self.n_pool_layers = n_pool_layers
+    self.filter_size_2D = filter_size_2D
+    self.init_n_filter = init_n_filter
+    self.filter_size_atrous_2D = filter_size_atrous_2D
+    self.n_atrous = n_atrous
     super(AtrousConvContactMap, self).__init__(**kwargs)
 
   def Conv1DModule(self, n_input, in_layer):
@@ -120,4 +138,97 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     decoded_layer, n_input = encode_decode_layer
 
   def atrous_structure(self, n_input, in_layer):
+
+    n_pool_layers = self.n_pool_layers
+    filter_size = self.filter_size_2D
+    init_n_filter = self.init_n_filter
+
+    self.encode_conv_layers = []
+    self.shortcut_layers = []
+    self.shortcut_shapes = [ToShape(init_n_filter,
+                                    self.batch_size,
+                                    in_layers=[self.n_residues])]
+    self.encode_pool_layers = []
+    self.decode_conv_layers = []
+    self.decode_up_layers = []
+    res_flag_2D = self.res_flag_2D
+    self.res_flags = [self.res_flag_2D]
+    for i in range(n_pool_layers):
+      n_filter = init_n_filter * (2**i)
+      self.encode_conv_layers.append(Conv2DLayer(
+          n_input_feat=n_input,
+          n_output_feat=n_filter,
+          n_size=filter_size,
+          in_layers=[in_layer, res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      in_layer = self.batch_norm_layers[-1]
+      n_input = n_filter
+
+      self.encode_conv_layers.append(Conv2DLayer(
+          n_input_feat=n_input,
+          n_output_feat=n_filter,
+          n_size=filter_size,
+          in_layers=[in_layer, res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      in_layer = self.batch_norm_layers[-1]
+      n_input = n_filter
+
+      self.shortcut_layers.append(in_layer)
+      self.shortcut_shapes.append(ShapePool(in_layers=[self.shortcut_shapes[-1]]))
+
+      self.encode_pool_layers.append(Conv2DPool(
+          n_size=2,
+          in_layers=[in_layer]))
+      in_layer = self.encode_pool_layers[-1]
+
+      flag_2D = Expand_dim(3, in_layers=[res_flag_2D])
+      new_flag_2D = Conv2DPool(n_size=2, in_layers=[flag_2D])
+      res_flag_2D = Squeeze(squeeze_dims=3, in_layers=[new_flag_2D])
+      self.res_flags.append(res_flag_2D)
+
+
+    n_filter = init_n_filter * (2**n_pool_layers)
+    filter_size_atrous = self.filter_size_atrous_2D
+    for i in range(self.n_atrous):
+      self.encode_conv_layers.append(Conv2DAtrous(
+          n_input_feat=n_input,
+          n_output_feat=n_filter,
+          n_size=filter_size_atrous,
+          rate=2**(i+1),
+          in_layers=[in_layer, res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      in_layer = self.batch_norm_layers[-1]
+      n_input = n_filter
+
+
+    for j in range(n_pool_layers):
+      res_flag_2D = self.res_flags[-(j+2)]
+      out_shape = self.shortcut_shapes[-(j+2)]
+      self.decode_up_layers.append(Conv2DUp(
+          n_input_feat=n_input,
+          n_output_feat=n_input//2,
+          n_size=2,
+          in_layers=[in_layer, out_shape, res_flag_2D]
+          ))
+      in_layer = Concat(axis=3, in_layers=[self.decode_up_layers[-1],
+          self.shortcut_layers[-(j+1)]])
+      n_filter = init_n_filter * (2**(n_pool_layers-1-j))
+      self.decode_conv_layers.append(Conv2DLayer(
+          n_input_feat=n_input,
+          n_output_feat=n_filter,
+          n_size=filter_size,
+          in_layers=[in_layer, res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1]]))
+      in_layer = self.batch_norm_layers[-1]
+      n_input = n_filter
+
+      self.decode_conv_layers.append(Conv2DLayer(
+          n_input_feat=n_input,
+          n_output_feat=n_filter,
+          n_size=filter_size,
+          in_layers=[in_layer, res_flag_2D]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1]]))
+      in_layer = self.batch_norm_layers[-1]
+      n_input = n_filter
+
     return n_input, in_layer

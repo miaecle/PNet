@@ -15,7 +15,7 @@ from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
 from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
     Expand_dim, ShapePool, ToShape, Conv1DAtrous, Conv2DAtrous, DiagConv2DLayer, \
-    DiagConv2DAtrous
+    DiagConv2DAtrous, Conv2DBilinearUp
 from pnet.models.conv_net_contact_map import to_one_hot, from_one_hot, ConvNetContactMapBase
 
 class DiagAtrousConvContactMap(ConvNetContactMapBase):
@@ -24,11 +24,12 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
                n_filter_1D=[20]*4,
                filter_size_atrous_1D=[3]*4,
                n_filter_atrous_1D=[20]*4,
-               n_pool_layers=4,
-               filter_size_2D=3,
+               n_pool_layers=2,
+               filter_size_2D=5,
                init_n_filter=64,
                filter_size_atrous_2D=3,
-               n_atrous=2,
+               n_atrous=4,
+               bilinear_up=True,
                **kwargs):
     """
     Parameters:
@@ -37,6 +38,10 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
       structure of 1D convolution: size of convolution
     n_filter_1D: list, optional
       structure of 1D convolution: depths of convolution
+    filter_size_atrous_1D: list, optional
+      structure of atrous 1D convolution: size of convolution
+    n_filter_atrous_1D: list, optional
+      structure of atrous 1D convolution: depths of convolution
     n_pool_layers: int, optional
       number of blocks(pooling layer) in the Conv2DModule
     filter_size_2D: int, optional
@@ -44,6 +49,10 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
     init_n_filter: int, optional
       number of filters for the first Conv2D block
       after each pooling layer, n_filter is doubled
+    filter_size_atrous_2D: int, optional
+      size of filter for Conv2DAtrous
+    n_atrous: int, optional
+      number of atrous layers: rate increase from 2, 4, 8, ...
     """
     self.filter_size_1D = filter_size_1D
     self.n_filter_1D = n_filter_1D
@@ -56,6 +65,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
     self.init_n_filter = init_n_filter
     self.filter_size_atrous_2D = filter_size_atrous_2D
     self.n_atrous = n_atrous
+    self.bilinear_up = bilinear_up
     super(DiagAtrousConvContactMap, self).__init__(**kwargs)
     assert self.uppertri == True
 
@@ -198,14 +208,21 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
     for j in range(n_pool_layers):
       res_flag_2D = self.res_flags[-(j+2)]
       out_shape = self.shortcut_shapes[-(j+2)]
-      self.decode_up_layers.append(Conv2DUp(
-          n_input_feat=n_input,
-          n_output_feat=n_input//2,
-          n_size=2,
-          in_layers=[in_layer, out_shape, res_flag_2D]
-          ))
+      if self.bilinear_up:
+        self.decode_up_layers.append(Conv2DBilinearUp(
+            uppertri=self.uppertri,
+            in_layers=[in_layer, out_shape, res_flag_2D]))
+        n_input = n_input + init_n_filter * (2**(n_pool_layers-1-j))
+      else:
+        self.decode_up_layers.append(Conv2DUp(
+            n_input_feat=n_input,
+            n_output_feat=n_input//2,
+            n_size=2,
+            in_layers=[in_layer, out_shape, res_flag_2D]))
+        
       in_layer = Concat(axis=3, in_layers=[self.decode_up_layers[-1],
           self.shortcut_layers[-(j+1)]])
+  
       n_filter = init_n_filter * (2**(n_pool_layers-1-j))
       self.decode_conv_layers.append(DiagConv2DLayer(
           n_input_feat=n_input,
