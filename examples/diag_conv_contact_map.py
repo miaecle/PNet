@@ -32,7 +32,7 @@ model = pnet.models.DiagAtrousConvContactMap(
     uppertri=True,
     mode='regression')
 
-model.fit(train, nb_epoch=1, checkpoint_interval=20)
+model.fit(train, nb_epoch=1, checkpoint_interval=100)
 
 train_scores = model.evaluate(train, metrics)
 print(train_scores)
