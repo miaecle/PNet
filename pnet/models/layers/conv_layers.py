@@ -350,6 +350,88 @@ class Conv2DAtrous(Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
+class Conv2DASPP(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size=3,
+               rate=[6, 12, 18, 24],
+               init='glorot_uniform',
+               activation='relu',
+               activation_first=True,
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels for each Atrous component
+    n_size: int
+      Number of filter size(full length)
+    rate: int
+      Rate of each atrous convolution
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    activation_first: bool, optional
+      If to apply activation before convolution
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    self.rate = rate
+    self.activation_first = activation_first
+    super(Conv2DASPP, self).__init__(**kwargs)
+
+  def build(self):
+    self.W = self.init([self.n_size, self.n_size, self.n_input_feat, self.n_output_feat])
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, output_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+
+    input_features = in_layers[0].out_tensor
+
+    if self.activation_first:
+      input_features = self.activation(input_features)
+      
+    n_channels = self.n_output_feat//len(self.rate)
+    output_feats = [0]
+    for i in range(1, len(self.rate)):
+      output_feats.append(n_channels*i)
+    output_feats.append(self.n_output_feat)
+      
+    out_tensors = [tf.nn.bias_add(tf.nn.atrous_conv2d(
+        input_features, 
+        self.W[:, :, :, output_feats[i]:output_feats[i+1]],
+        rate=rate,
+        padding='SAME'), self.b[output_feats[i]:output_feats[i+1]])
+        for i, rate in enumerate(self.rate)]
+    out_tensor = tf.concat(out_tensors, 3)
+    
+    if len(in_layers) > 1:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      out_tensor = out_tensor * tf.to_float(flag)
+    if not self.activation_first:
+      out_tensor = self.activation(out_tensor)
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+  
 class Outer1DTo2DLayer(Layer):
 
   def __init__(self,

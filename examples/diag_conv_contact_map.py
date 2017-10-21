@@ -10,8 +10,8 @@ import numpy as np
 import pnet
 import os
 
-train = pnet.utils.load_PDB50()
-data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50ALL')
+train = pnet.utils.load_PDB50_selected()
+data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50selected')
 train.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_train)
 train.build_labels(path=data_dir_train, weight_adjust=0.03, binary=False)
 

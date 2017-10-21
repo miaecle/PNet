@@ -15,7 +15,7 @@ from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
 from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
     Expand_dim, ShapePool, ToShape, Conv1DAtrous, Conv2DAtrous, DiagConv2DLayer, \
-    DiagConv2DAtrous, Conv2DBilinearUp
+    DiagConv2DAtrous, Conv2DBilinearUp, DiagConv2DASPP
 from pnet.models.conv_net_contact_map import to_one_hot, from_one_hot, ConvNetContactMapBase
 
 class DiagAtrousConvContactMap(ConvNetContactMapBase):
@@ -203,7 +203,16 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
       #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
       in_layer = self.encode_conv_layers[-1]
       n_input = n_filter
-
+    
+    self.encode_conv_layers.append(DiagConv2DASPP(
+        n_input_feat=n_input,
+        n_output_feat=n_filter*2,
+        n_size=3,
+        rate=[6, 12, 18, 24],
+        in_layers=[in_layer, res_flag_2D]))
+    #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+    in_layer = self.encode_conv_layers[-1]
+    n_input = n_filter*2
 
     for j in range(n_pool_layers):
       res_flag_2D = self.res_flags[-(j+2)]

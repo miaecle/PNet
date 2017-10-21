@@ -10,6 +10,7 @@ import os
 import pandas as pd
 import numpy as np
 import joblib
+import csv
 from pnet.data import SequenceDataset
 from pnet.data import merge_datasets
 
@@ -80,6 +81,13 @@ def load_PDB50(raw=False, load_pdb=False):
     path = os.path.join(path, 'pdb50_seq.csv')
     return load_sequence(path, load_pdb=load_pdb)
 
+def load_PDB50_selected(load_pdb=False):
+  """ Load all samples from PDB50 subset """
+  datasets_path = os.environ['PNET_DATA_DIR']
+  path = os.path.join(datasets_path, 'PDB50selected')
+  path = os.path.join(path, 'pdb50selected.csv')
+  return load_sequence(path, load_pdb=load_pdb)
+  
 def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
   if not ID.__class__ is list:
@@ -112,6 +120,14 @@ def write_sequence(sequences, path):
       f.writelines(['>'+'TEMP'+str(i%10)+'\n', sequences[i] + '\n'])
       f.writelines(['\n', '\n'])
 
+def write_dataset_to_csv(dataset, path):
+  with open(path, 'w') as f:
+    writer = csv.writer(f)
+    l = ['ID', 'pdb', 'sequence']
+    writer.writerow(l)
+    for i in range(dataset.get_num_samples()):
+      l = [dataset._IDs[i], dataset._pdb_paths[i], dataset._sequences[i]]
+      writer.writerow(l)
 
 def save_to_joblib(data, path, compress=3):
   """ Save data to a joblib file """
