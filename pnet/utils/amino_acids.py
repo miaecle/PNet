@@ -35,6 +35,30 @@ AminoAcid = {
     'U': 23,
     }
 
+AminoAcid_SMILES = [
+    'O=C(O)C(N)C',
+    'O=C(O)C(N)CCC/N=C(\N)N',
+    'O=C(N)C[C@H](N)C(=O)O',
+    'O=C(O)CC(N)C(=O)O',
+    'C([C@@H](C(=O)O)N)S',
+    'O=C(N)CCC(N)C(=O)O',
+    'C(CC(=O)O)C(C(=O)O)N',
+    'C(C(=O)O)N',
+    'C1=C(NC=N1)C[C@@H](C(=O)O)N',
+    'CC[C@H](C)[C@@H](C(=O)O)N',
+    'CC(C)C[C@@H](C(=O)O)N',
+    'C(CCN)CC(C(=O)O)N',
+    'CSCCC(C(=O)O)N',
+    'c1ccc(cc1)C[C@@H](C(=O)O)N',
+    'C1CC(NC1)C(=O)O',
+    'C([C@@H](C(=O)O)N)O',
+    'C[C@H]([C@@H](C(=O)O)N)O',
+    'c1ccc2c(c1)c(c[nH]2)C[C@@H](C(=O)O)N',
+    'N[C@@H](Cc1ccc(O)cc1)C(O)=O',
+    'CC(C)[C@@H](C(=O)O)N',
+    'C(C(C(=O)O)N)[Se]']
+
+
 BLOSUM62 = np.array([
     [1,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4],
     [-4,4,-1,-2,-2,0,-1,-1,0,-2,-1,-1,-1,-1,-2,-1,1,0,-3,-2,0,-2,-1,0],

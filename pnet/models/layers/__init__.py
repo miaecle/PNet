@@ -4,6 +4,7 @@ from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
 from conv_layers_torch import TorchResidueEmbedding, TorchOuter, TorchContactMapGather, TorchResAdd
 import deepchem
+from deepchem.models.tensorgraph.layers import convert_to_layers
 import tensorflow as tf
 
 class Expand_dim(deepchem.models.tensorgraph.layers.Layer):
@@ -57,6 +58,61 @@ class ShapePool(deepchem.models.tensorgraph.layers.Layer):
                              shape_orig[3]*2], 0)
     else:
       raise ValueError("padding not supported")
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class AminoAcidEmbedding(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self,
+               pos_start=0,
+               pos_end=25,
+               **kwargs):
+    self.pos_start = pos_start
+    self.pos_end = pos_end
+    super(AminoAcidEmbedding, self).__init__(**kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    input_features = in_layers[0].out_tensor
+    amino_acid_features = in_layers[1].out_tensor
+
+    i = tf.shape(input_features)[0]
+    j = tf.shape(input_features)[1]
+    embedding_length = tf.shape(amino_acid_features)[1]
+    embedded_features = tf.reshape(tf.matmul(tf.reshape(input_features[:, :, self.pos_start:self.pos_end],
+                                                        [i*j, self.pos_end - self.pos_start]),
+                                             amino_acid_features),
+                                   [i, j, embedding_length])
+
+    out_tensor = tf.concat([embedded_features, input_features[:, :, self.pos_end:]], axis=2)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+  
+class AminoAcidPad(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self,
+               embedding_length,
+               **kwargs):
+    self.embedding_length = embedding_length
+    super(AminoAcidPad, self).__init__(**kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    AA_features = in_layers[0].out_tensor
+    Pad_features = tf.random_normal((4, self.embedding_length))
+    out_tensor = tf.concat([Pad_features[:1, :], AA_features[:20, :], Pad_features[1:, :], AA_features[20:, :]], axis=0)
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor

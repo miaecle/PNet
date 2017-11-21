@@ -7,10 +7,16 @@ Created on Tue Jun 20 21:28:44 2017
 
 import numpy as np
 import tensorflow as tf
+import pickle
+import deepchem as dc
+from rdkit import Chem
+from deepchem.feat.mol_graphs import ConvMol
 from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
-    SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, Weights, Feature
-from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd
+    SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
+    Weights, Feature, TensorWrapper, GraphConv, GraphPool, GraphGather
+from pnet.models.layers import AminoAcidEmbedding, AminoAcidPad, Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd
+from pnet.utils.amino_acids import AminoAcid_SMILES
 
 def to_one_hot(y, n_classes=2):
   """Transforms label vector into one-hot encoding.
@@ -36,10 +42,12 @@ class ConvNetContactMapBase(TensorGraph):
   def __init__(self,
                n_res_feat=56,
                embedding=True,
-               embedding_length=50,
+               embedding_length=100,
                max_n_res=1000,
                mode="classification",
                uppertri=False,
+               learning_rate=1e-5,
+               learning_rate_decay=0.96,
                **kwargs):
     """
     Parameters:
@@ -65,50 +73,98 @@ class ConvNetContactMapBase(TensorGraph):
     self.mode = mode
     self.uppertri = uppertri
     super(ConvNetContactMapBase, self).__init__(**kwargs)
+    
+    global_step = self._get_tf("GlobalStep")
+    learning_rate = tf.train.exponential_decay(learning_rate, 
+                                               global_step, 
+                                               100000, 
+                                               learning_rate_decay)
+    self.set_optimizer(tf.train.AdamOptimizer(learning_rate=learning_rate,
+                                              beta1=0.9, 
+                                              beta2=0.999, 
+                                              epsilon=1e-7))
     self.build_graph()
+  
+  def amino_acid_embedding(self):
+    feat = dc.feat.ConvMolFeaturizer()
+    featurized_AA = [feat._featurize(Chem.MolFromSmiles(smile)) for smile in AminoAcid_SMILES]
+    multiConvMol = ConvMol.agglomerate_mols(featurized_AA)
+    atom_features = TensorWrapper(tf.constant(multiConvMol.get_atom_features(), dtype=tf.float32))
+    degree_slice = TensorWrapper(tf.constant(multiConvMol.deg_slice, dtype=tf.int32))
+    membership = TensorWrapper(tf.constant(multiConvMol.membership, dtype=tf.int32))
+
+    deg_adjs = []
+    for i in range(0, 10):
+      deg_adjs.append(TensorWrapper(tf.constant(multiConvMol.get_deg_adjacency_lists()[i+1], dtype=tf.int32)))
+      
+    gc1 = GraphConv(
+        64,
+        activation_fn=tf.nn.relu,
+        in_layers=[atom_features, degree_slice, membership] + deg_adjs)
+    batch_norm1 = BatchNorm(in_layers=[gc1])
+    gp1 = GraphPool(in_layers=[batch_norm1, degree_slice, membership] + deg_adjs)
+    gc2 = GraphConv(
+        64,
+        activation_fn=tf.nn.relu,
+        in_layers=[gp1, degree_slice, membership] + deg_adjs)
+    batch_norm2 = BatchNorm(in_layers=[gc2])
+    gp2 = GraphPool(in_layers=[batch_norm2, degree_slice, membership] + deg_adjs)
+    dense = Dense(out_channels=self.embedding_length/2, activation_fn=tf.nn.relu, in_layers=[gp2])
+    batch_norm3 = BatchNorm(in_layers=[dense])
+    readout = GraphGather(
+        batch_size=21,
+        activation_fn=tf.nn.tanh,
+        in_layers=[batch_norm3, degree_slice, membership] + deg_adjs)
+    padding = AminoAcidPad(
+        embedding_length=self.embedding_length,
+        in_layers=[readout])
+    return padding
+
 
   def build_graph(self):
     """ Build graph structure """
-    self.res_features = Feature(shape=(self.batch_size, None, self.n_res_feat))
-    # Placeholder for valid index
-    self.res_flag_1D = Feature(shape=(self.batch_size, None), dtype=tf.int32)
-    self.res_flag_2D = Feature(shape=(self.batch_size, None, None), dtype=tf.int32)
-    self.n_residues = Feature(shape=(self.batch_size,), dtype=tf.int32)
+    with self._get_tf("Graph").as_default():
+      self.res_features = Feature(shape=(self.batch_size, None, self.n_res_feat))
+      self.amino_acid_features = self.amino_acid_embedding()
+      # Placeholder for valid index
+      self.res_flag_1D = Feature(shape=(self.batch_size, None), dtype=tf.int32)
+      self.res_flag_2D = Feature(shape=(self.batch_size, None, None), dtype=tf.int32)
+      self.n_residues = Feature(shape=(self.batch_size,), dtype=tf.int32)
 
-    n_input = self.n_res_feat
-    in_layer = self.res_features
-    if self.embedding:
-      # Add embedding layer
-      self.residues_embedding = ResidueEmbedding(
-          pos_start=0,
-          pos_end=25,
-          embedding_length=self.embedding_length,
-          in_layers=[in_layer])
+      n_input = self.n_res_feat
+      in_layer = self.res_features
+      if self.embedding:
+        # Add embedding layer
+        self.residues_embedding = AminoAcidEmbedding(
+            pos_start=0,
+            pos_end=25,
+            embedding_length=self.embedding_length,
+            in_layers=[in_layer, self.amino_acid_features])
 
-      n_input = n_input - 25 + self.embedding_length
-      in_layer = self.residues_embedding
+        n_input = n_input - 25 + self.embedding_length
+        in_layer = self.residues_embedding
 
-    # User-defined structures
-    n_input, self.conv1d_out_layer = self.Conv1DModule(n_input, in_layer)
-    n_input, self.outer_out_layer = self.OuterModule(n_input, self.conv1d_out_layer)
-    n_input, self.conv2d_out_layer = self.Conv2DModule(n_input, self.outer_out_layer)
-    n_input, self.gather_out_layer = self.GatherModule(n_input, self.conv2d_out_layer)
+      # User-defined structures
+      n_input, self.conv1d_out_layer = self.Conv1DModule(n_input, in_layer)
+      n_input, self.outer_out_layer = self.OuterModule(n_input, self.conv1d_out_layer)
+      n_input, self.conv2d_out_layer = self.Conv2DModule(n_input, self.outer_out_layer)
+      n_input, self.gather_out_layer = self.GatherModule(n_input, self.conv2d_out_layer)
 
-    # Add loss layer
-    if self.mode == "classification":
-      softmax = SoftMax(in_layers=[self.gather_out_layer])
-      self.add_output(softmax)
-      self.contact_labels = Label(shape=(None, 2))
-      self.contact_weights = Weights(shape=(None, 1))
-      cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer])
-    elif self.mode == "regression":
-      self.add_output(self.gather_out_layer)
-      self.contact_labels = Label(shape=(None, 1))
-      self.contact_weights = Weights(shape=(None, 1))
-      cost = L2Loss(in_layers=[self.contact_labels, self.gather_out_layer])
-    self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights])
-    self.set_loss(self.cost_balanced)
-    return
+      # Add loss layer
+      if self.mode == "classification":
+        softmax = SoftMax(in_layers=[self.gather_out_layer])
+        self.add_output(softmax)
+        self.contact_labels = Label(shape=(None, 2))
+        self.contact_weights = Weights(shape=(None, 1))
+        cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer])
+      elif self.mode == "regression":
+        self.add_output(self.gather_out_layer)
+        self.contact_labels = Label(shape=(None, 1))
+        self.contact_weights = Weights(shape=(None, 1))
+        cost = L2Loss(in_layers=[self.contact_labels, self.gather_out_layer])
+      self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights])
+      self.set_loss(self.cost_balanced)
+      return 
 
   def default_generator(self,
                         dataset,

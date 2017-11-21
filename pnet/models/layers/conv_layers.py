@@ -74,7 +74,8 @@ class ResidueEmbedding(Layer):
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
     return out_tensor
-
+  
+  
 class Conv1DLayer(Layer):
 
   def __init__(self,
