@@ -42,6 +42,12 @@ class Metric(deepchem.metrics.Metric):
     assert mode in ["classification", "regression"]
     self.mode = mode
 
+  @staticmethod
+  def uppertri(y):
+    assert y.shape[0] == y.shape[1]
+    assert len(y.shape) >= 2
+    return np.concatenate([y[k, k:] for k in range(y.shape[0])], axis=0)
+  
   def compute_metric(self,
                      y_true,
                      y_pred,
@@ -72,7 +78,7 @@ class Metric(deepchem.metrics.Metric):
     _y = []
     _w = []
     for i, y_sample in enumerate(y_true):
-      sample = y_sample.flatten()
+      sample = self.uppertri(y_sample)
       _y.append(np.stack([sample, np.ones_like(sample)*i], 1))
 
       if separate_range:
@@ -85,11 +91,11 @@ class Metric(deepchem.metrics.Metric):
         range_medium = ((23 - full_range ) >= 0).astype(float) * \
             ((full_range - 12 ) >= 0).astype(float)  * w[i]
         range_long = ((full_range - 24 ) >= 0).astype(float) * w[i]
-        _w.append(np.stack([range_short.flatten(),
-                               range_medium.flatten(),
-                               range_long.flatten()], 1))
+        _w.append(np.stack([self.uppertri(range_short),
+                            self.uppertri(range_medium),
+                            self.uppertri(range_long)], 1))
       else:
-        _w.append(w[i].flatten())
+        _w.append(self.uppertri(w[i]))
     _y = np.concatenate(_y, 0)
     _w = np.concatenate(_w, 0)
     assert _y.shape[0] == y_pred.shape[0] == _w.shape[0]

@@ -9,10 +9,10 @@ Created on Thu Aug 24 17:07:15 2017
 import numpy as np
 import tensorflow as tf
 from deepchem.models.tensorgraph.tensor_graph import TensorGraph
-from deepchem.models.tensorgraph.layers import Input, BatchNorm, Dense, \
+from deepchem.models.tensorgraph.layers import Input, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature, Squeeze
-from pnet.models.layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
+from pnet.models.layers import BatchNorm, ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
     Expand_dim, ShapePool, ToShape, Conv1DAtrous, Conv2DAtrous, DiagConv2DLayer, \
     DiagConv2DAtrous, Conv2DBilinearUp, DiagConv2DASPP
@@ -92,7 +92,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_output_feat=n_output,
           n_size=self.filter_size_1D[i],
           in_layers=[in_layer, self.res_flag_1D]))
-      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_1D_layers[-1]]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_1D_layers[-1], self.training_placeholder]))
       n_input = n_output
       in_layer = self.batch_norm_layers[-1]
       if i%2 == 1:
@@ -109,7 +109,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_size=self.filter_size_atrous_1D[i],
           rate = rate,
           in_layers=[in_layer, self.res_flag_1D]))
-      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_1D_layers[-1]]))
+      self.batch_norm_layers.append(BatchNorm(in_layers=[self.conv_1D_layers[-1], self.training_placeholder]))
       n_input = n_output
       in_layer = self.batch_norm_layers[-1]
 
@@ -164,7 +164,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_output_feat=n_filter,
           n_size=filter_size,
           in_layers=[in_layer, res_flag_2D]))
-      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1], self.training_placeholder]))
       in_layer = self.encode_conv_layers[-1]
       n_input = n_filter
 
@@ -173,7 +173,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_output_feat=n_filter,
           n_size=filter_size,
           in_layers=[in_layer, res_flag_2D]))
-      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1], self.training_placeholder]))
       in_layer = self.encode_conv_layers[-1]
       n_input = n_filter
 
@@ -200,7 +200,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_size=filter_size_atrous,
           rate=2**(i+1),
           in_layers=[in_layer, res_flag_2D]))
-      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1], self.training_placeholder]))
       in_layer = self.encode_conv_layers[-1]
       n_input = n_filter
     
@@ -210,7 +210,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
         n_size=3,
         rate=[6, 12, 18, 24],
         in_layers=[in_layer, res_flag_2D]))
-    #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1]]))
+    #self.batch_norm_layers.append(BatchNorm(in_layers=[self.encode_conv_layers[-1], self.training_placeholder]))
     in_layer = self.encode_conv_layers[-1]
     n_input = n_filter*2
 
@@ -238,7 +238,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_output_feat=n_filter,
           n_size=filter_size,
           in_layers=[in_layer, res_flag_2D]))
-      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1]]))
+      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1], self.training_placeholder]))
       in_layer = self.decode_conv_layers[-1]
       n_input = n_filter
 
@@ -247,7 +247,7 @@ class DiagAtrousConvContactMap(ConvNetContactMapBase):
           n_output_feat=n_filter,
           n_size=filter_size,
           in_layers=[in_layer, res_flag_2D]))
-      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1]]))
+      #self.batch_norm_layers.append(BatchNorm(in_layers=[self.decode_conv_layers[-1], self.training_placeholder]))
       in_layer = self.decode_conv_layers[-1]
       n_input = n_filter
 

@@ -83,6 +83,9 @@ class SequenceDataset(object):
     ts = []
     resseqs = []
     xyz = []
+    phis = []
+    psis = []
+    phi_psi_weights = []
     RRs = []
     RR_weights = []
     pdbl = PDBList()
@@ -93,6 +96,9 @@ class SequenceDataset(object):
         ts.append(None)
         resseqs.append(None)
         xyz.append(None)
+        phis.append(np.zeros((n_residues,)))
+        psis.append(np.zeros((n_residues,)))
+        phi_psi_weights.append(np.zeros((n_residues,)))
         RR = np.zeros((n_residues, n_residues))
         if binary:
           RRs.append(np.array(RR, dtype=bool))
@@ -116,14 +122,29 @@ class SequenceDataset(object):
           chain = t.topology.chain(chain_ID)
 
         # Calibrate the starting position of chain
-        code_start = [chain.residue(j).code for j in range(10)]
-        resseq_start = [chain.residue(j).resSeq for j in range(10)]
+        resNames = np.unique(list(self._sequences[i]))
+        code_start = [chain.residue(j).code for j in range(chain.n_residues) if chain.residue(j).code in resNames]
+        resseq_start = [chain.residue(j).resSeq for j in range(chain.n_residues) if chain.residue(j).code in resNames]
         resseq_pos = self._calibrate_resseq(self._sequences[i], code_start, resseq_start)
         # resseq_pos should always be non-negative
         assert isinstance(resseq_pos, int), "Conflict in sequences"
+        
+        # Calculate phi, psi angles
+        phi, psi, phi_psi_weight = self.calculate_phi_psi(chain, t, resseq_pos, n_residues)
+        phis.append(phi)
+        psis.append(psi)
+        phi_psi_weights.append(phi_psi_weight)
         if not self.keep_all:
           # Only use beta-C to calculate residue-residue contact
-          atoms_to_keep = [a for a in chain.atoms if a.name == 'CB']
+          atoms_to_keep = []
+          for res in chain.residues:
+            try:
+              if res.code == 'G':
+                atoms_to_keep.append(res.atom('CA'))
+              else:
+                atoms_to_keep.append(res.atom('CB'))
+            except KeyError:
+              print("%s residue number: %d %s" % (self._IDs[i], res.resSeq-resseq_pos, res.code))
           # Residue position in the sequence
           resseq = np.array([a.residue.resSeq for a in atoms_to_keep]) - resseq_pos
           index = [a.index for a in atoms_to_keep]
@@ -173,35 +194,55 @@ class SequenceDataset(object):
     self._resseqs = resseqs
     self.xyz = xyz
     self.calculate_residue_distances(self.xyz)
+    self.phis = phis
+    self.psis = psis
+    self.phi_psi_weights = phi_psi_weights
     self.RRs = RRs
     self.RR_weights = RR_weights
     self.load_pdb = True
 
   def calculate_residue_distances(self, xyz):
     self.distances = []
-    self.angles = []
     self.dis_weights = []
     for i in range(self.n_samples):
       length = len(self._sequences[i])
       distance = np.zeros((length,))
-      angle = np.zeros((length,))
       dis_weight = np.zeros((length,))
       if not xyz[i] is None:
         assert xyz[i].shape[0] == length
         for j in range(1, length-1):
-          if np.all(xyz[i][j-1, :] == np.zeros((3,))) or \
-             np.all(xyz[i][j, :] == np.zeros((3,))) or \
+          if np.all(xyz[i][j, :] == np.zeros((3,))) or \
              np.all(xyz[i][j+1, :] == np.zeros((3,))):
              pass
           else:
             distance[j] = np.linalg.norm(xyz[i][j+1, :] - xyz[i][j, :])
-            angle[j] = self._calculate_angle(xyz[i][j-1, :],
-                                             xyz[i][j, :],
-                                             xyz[i][j+1, :])
             dis_weight[j] = 1
       self.distances.append(np.array(distance))
-      self.angles.append(np.array(angle))
       self.dis_weights.append(np.array(dis_weight))
+
+  def calculate_phi_psi(self, chain, t, resseq_pos, n_res):
+    indices1, angles1 = md.compute_phi(t)
+    indices2, angles2 = md.compute_psi(t)
+    restricted_residues = list(chain.residues)
+    indices1 = [t.topology.atom(indice[0]).residue for indice in indices1]
+    indices2 = [t.topology.atom(indice[0]).residue for indice in indices2]
+    
+    phi = [angles1[0, i] for i in range(len(angles1[0])) if indices1[i] in restricted_residues]
+    phi_inds = np.array([indice.resSeq for indice in indices1 if indice in restricted_residues]) - resseq_pos
+    psi = [angles2[0, i] for i in range(len(angles2[0])) if indices2[i] in restricted_residues]
+    psi_inds = np.array([indice.resSeq for indice in indices2 if indice in restricted_residues]) - resseq_pos
+    
+    out = np.zeros((n_res, 2)) # phi, psi
+    weight1 = np.zeros((n_res, 1))
+    weight2 = np.zeros((n_res, 1))
+    for i, ind in enumerate(phi_inds):
+      out[ind, 0] = phi[i]
+      weight1[ind] -= 1
+    for i, ind in enumerate(psi_inds):
+      out[ind, 1] = psi[i]
+      weight2[ind] -= 1
+    return out[:, 0], out[:, 1], (weight1*weight2)[:, 0]
+    
     
   @staticmethod
   def _calibrate_resseq(seq, code_start, resseq_start):
@@ -209,9 +250,10 @@ class SequenceDataset(object):
     for i, res in enumerate(list(seq)):
       if res == code_start[0]:
         resseq_pos = resseq_start[0] - i
-        if list(np.array(list(seq))[np.array(resseq_start[1:])-resseq_pos]) \
-            == code_start[1:]:
+        if sum(np.array(list(seq))[np.array(resseq_start[1:])-resseq_pos] == \
+               np.array(code_start[1:])) >= (len(code_start) - 1) * 0.98:
           return resseq_pos
+    return False
   
   @staticmethod
   def _calculate_angle(a, b, c):
@@ -434,6 +476,7 @@ class SequenceDataset(object):
   def build_labels(self, task='RR', binary=True, threshold=0.8,
                    weight_adjust=1., file_size=100, reload=True, path=None):
     """ Build labels(y and w) for all samples """
+    self.build_1D_labels(reload=reload, path=path)
     if not path is None:
       if binary:
         path = os.path.join(path, 'binary'+str(threshold)+'_'+str(int(weight_adjust)))
@@ -441,6 +484,8 @@ class SequenceDataset(object):
           os.makedirs(path)
       else:
         path = os.path.join(path, 'continuous')
+        if not os.path.exists(path):
+          os.makedirs(path)
       path_y = os.path.join(path, 'y')
       path_w = os.path.join(path, 'w')
       if reload and os.path.exists(path_y + '0.joblib') and os.path.exists(path_w + '0.joblib'):
@@ -466,10 +511,11 @@ class SequenceDataset(object):
       self.y = self.load_joblib(path_y)
       self.w = self.load_joblib(path_w)
       self.y_on_disk = True
-    self.build_1D_labels(reload=reload, path=path)
     
   def build_1D_labels(self, file_size=500, reload=True, path=None):
-    """ Build labels(y and w) for all samples """
+    """ Build 1D labels(y and w) for all samples:  distances, psis, phis
+    
+    """
     if not path is None:
       path = os.path.join(path, 'oneD_label')
       if not os.path.exists(path):
@@ -484,8 +530,9 @@ class SequenceDataset(object):
         return
     if not self.load_pdb:
       self.load_structures()
-    self.oneD_y = [np.stack([self.distances[i], self.angles[i]], axis=1) for i in range(self.n_samples)]
-    self.oneD_w = self.dis_weights
+    self.oneD_y = [np.stack([self.distances[i], self.phis[i], self.psis[i]], axis=1) for i in range(self.n_samples)]
+      
+    self.oneD_w = [self.dis_weights[i]*self.phi_psi_weights[i] for i in range(self.n_samples)]
     self.oneD_y_built = True
     if reload and not path is None:
       self.save_joblib(self.oneD_y, path_y, file_size=file_size)

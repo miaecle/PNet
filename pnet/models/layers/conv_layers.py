@@ -18,6 +18,27 @@ from deepchem.nn import model_ops
 from deepchem.models.tensorgraph.layers import Layer
 from deepchem.models.tensorgraph.layers import convert_to_layers
 
+class BatchNorm(Layer):
+
+  def __init__(self, in_layers=None, **kwargs):
+    super(BatchNorm, self).__init__(in_layers, **kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    parent_tensor = in_layers[0].out_tensor
+    if len(in_layers) > 1:
+      train_flag = in_layers[1].out_tensor
+    else:
+      train_flag = False
+    out_tensor = tf.layers.batch_normalization(parent_tensor, training=train_flag)
+    
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+  
 class ResidueEmbedding(Layer):
 
   def __init__(self,
@@ -60,7 +81,7 @@ class ResidueEmbedding(Layer):
     in_layers = convert_to_layers(in_layers)
 
     self.build()
-    input_features = in_layers[0].out_tensor
+    input_features = in_layers[0].out_tensor # batch_size * None * n_channel
 
     i = tf.shape(input_features)[0]
     j = tf.shape(input_features)[1]
@@ -68,8 +89,8 @@ class ResidueEmbedding(Layer):
                                                         [i*j, self.pos_end - self.pos_start]),
                                              self.embedding),
                                    [i, j, self.embedding_length])
-
     out_tensor = tf.concat([embedded_features, input_features[:, :, self.pos_end:]], axis=2)
+    
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -84,7 +105,6 @@ class Conv1DLayer(Layer):
                n_size,
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
                **kwargs):
     """
     Parameters
@@ -105,7 +125,6 @@ class Conv1DLayer(Layer):
     """
     self.init = initializations.get(init)  # Set weight initialization
     self.activation = activations.get(activation)  # Get activations
-    self.activation_first = activation_first # If to switch the order of convolution and activation
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
@@ -122,25 +141,31 @@ class Conv1DLayer(Layer):
     if in_layers is None:
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
-
     self.build()
 
     input_features = in_layers[0].out_tensor
-    if self.activation_first:
-      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
-    if len(in_layers) > 1:
+    
+    
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
+      train_flag = in_layers[2].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
       out_tensor = out_tensor * tf.to_float(flag)
-    if not self.activation_first:
-      out_tensor = self.activation(out_tensor)
+    
+    
+    out_tensor = self.activation(out_tensor)
+    
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
     return out_tensor
-
-
+ 
+  
 class Conv1DAtrous(Layer):
 
   def __init__(self,
@@ -150,7 +175,6 @@ class Conv1DAtrous(Layer):
                rate,
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
                **kwargs):
     """
     Parameters
@@ -173,7 +197,6 @@ class Conv1DAtrous(Layer):
     """
     self.init = initializations.get(init)  # Set weight initialization
     self.activation = activations.get(activation)  # Get activations
-    self.activation_first = activation_first # If to switch the order of convolution and activation
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
@@ -200,15 +223,19 @@ class Conv1DAtrous(Layer):
     self.build()
 
     input_features = in_layers[0].out_tensor
-    if self.activation_first:
-      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv1d(input_features, self.W, stride=1, padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
-    if len(in_layers) > 1:
+    
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
+      train_flag = in_layers[2].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
       out_tensor = out_tensor * tf.to_float(flag)
-    if not self.activation_first:
-      out_tensor = self.activation(out_tensor)
+    
+    out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -223,7 +250,6 @@ class Conv2DLayer(Layer):
                n_size,
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
                **kwargs):
     """
     Parameters
@@ -247,7 +273,6 @@ class Conv2DLayer(Layer):
     self.n_input_feat = n_input_feat
     self.n_output_feat = n_output_feat
     self.n_size = n_size
-    self.activation_first = activation_first
     super(Conv2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -265,15 +290,19 @@ class Conv2DLayer(Layer):
     self.build()
 
     input_features = in_layers[0].out_tensor
-    if self.activation_first:
-      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv2d(input_features, self.W, strides=[1, 1, 1, 1], padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
-    if len(in_layers) > 1:
+    
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      train_flag = in_layers[2].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
-    if not self.activation_first:
-      out_tensor = self.activation(out_tensor)
+    
+    out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -288,7 +317,6 @@ class Conv2DAtrous(Layer):
                rate,
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
                **kwargs):
     """
     Parameters
@@ -315,7 +343,6 @@ class Conv2DAtrous(Layer):
     self.n_output_feat = n_output_feat
     self.n_size = n_size
     self.rate = rate
-    self.activation_first = activation_first
     super(Conv2DAtrous, self).__init__(**kwargs)
 
   def build(self):
@@ -334,18 +361,22 @@ class Conv2DAtrous(Layer):
 
     input_features = in_layers[0].out_tensor
 
-    if self.activation_first:
-      input_features = self.activation(input_features)
     out_tensor = tf.nn.atrous_conv2d(input_features,
                                      self.W,
                                      rate=self.rate,
                                      padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
-    if len(in_layers) > 1:
+    
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      train_flag = in_layers[2].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
-    if not self.activation_first:
-      out_tensor = self.activation(out_tensor)
+      
+    out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -360,7 +391,6 @@ class Conv2DASPP(Layer):
                rate=[6, 12, 18, 24],
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
                **kwargs):
     """
     Parameters
@@ -387,7 +417,6 @@ class Conv2DASPP(Layer):
     self.n_output_feat = n_output_feat
     self.n_size = n_size
     self.rate = rate
-    self.activation_first = activation_first
     super(Conv2DASPP, self).__init__(**kwargs)
 
   def build(self):
@@ -405,9 +434,6 @@ class Conv2DASPP(Layer):
     self.build()
 
     input_features = in_layers[0].out_tensor
-
-    if self.activation_first:
-      input_features = self.activation(input_features)
       
     n_channels = self.n_output_feat//len(self.rate)
     output_feats = [0]
@@ -423,11 +449,16 @@ class Conv2DASPP(Layer):
         for i, rate in enumerate(self.rate)]
     out_tensor = tf.concat(out_tensors, 3)
     
-    if len(in_layers) > 1:
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+      train_flag = in_layers[2].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 1:
       flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
-    if not self.activation_first:
-      out_tensor = self.activation(out_tensor)
+      
+    out_tensor = self.activation(out_tensor)
     if set_tensors:
       self.variables = self.trainable_weights
       self.out_tensor = out_tensor
@@ -443,21 +474,22 @@ class Outer1DTo2DLayer(Layer):
     self.trainable_weights = []
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
-    """ parent layers: input_features, input_flag_2D
-    This layer concats 1D sequences into 2D sequences
-    """
     if in_layers is None:
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
+    
     self.build()
     input_features = in_layers[0].out_tensor
     max_n_res = tf.reduce_max(in_layers[1].out_tensor, keep_dims=True)
+    
     tensor1 = tf.expand_dims(input_features, axis=1)
     max_n_res1 = tf.concat([tf.constant([1]), max_n_res, tf.constant([1]), tf.constant([1])], axis=0)
     tensor1 = tf.tile(tensor1, max_n_res1)
+    
     tensor2 = tf.expand_dims(input_features, axis=2)
     max_n_res2 = tf.concat([tf.constant([1]), tf.constant([1]), max_n_res, tf.constant([1])], axis=0)
     tensor2 = tf.tile(tensor2, max_n_res2)
+    
     out_tensor = tf.concat([tensor1, tensor2], axis=3)
 
     if len(in_layers) > 2:
@@ -508,12 +540,13 @@ class ContactMapGather(Layer):
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
     self.build()
+    
     input_features = in_layers[0].out_tensor
-    input_features = self.activation(input_features)
     input_features = (input_features + tf.transpose(input_features, perm=[0, 2, 1, 3])) / 2
-    if len(in_layers) > 1:
-      flag = tf.cast(in_layers[1].out_tensor, dtype=tf.bool)
-      out_tensor = tf.boolean_mask(input_features, flag)
+    
+    flag = tf.cast(in_layers[1].out_tensor, dtype=tf.bool)
+    out_tensor = tf.boolean_mask(input_features, flag)
+      
     out_tensor = tf.nn.xw_plus_b(out_tensor, self.W, self.b)
     if set_tensors:
       self.variables = self.trainable_weights
@@ -645,17 +678,22 @@ class Conv2DUp(Layer):
     input_features = in_layers[0].out_tensor
     out_shape = in_layers[1].out_tensor
 
-    if self.activation_first:
-      input_features = self.activation(input_features)
     out_tensor = tf.nn.conv2d_transpose(input_features,
                                         self.W,
                                         out_shape,
                                         strides=[1, self.n_size, self.n_size, 1],
                                         padding='SAME')
     out_tensor = tf.nn.bias_add(out_tensor, self.b)
-    if len(in_layers) > 2:
+    
+    if len(in_layers) > 3:
+      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
+      train_flag = in_layers[3].out_tensor
+      out_tensor = tf.layers.batch_normalization(out_tensor, training=train_flag)
+      out_tensor = out_tensor * tf.to_float(flag)
+    elif len(in_layers) > 2:
       flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
+      
     if not self.activation_first:
       out_tensor = self.activation(out_tensor)
     if set_tensors:

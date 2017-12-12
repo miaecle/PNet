@@ -1,6 +1,6 @@
 from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
-    Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP
+    Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
 from conv_layers_torch import TorchResidueEmbedding, TorchOuter, TorchContactMapGather, TorchResAdd
 import deepchem
@@ -39,23 +39,28 @@ class ToShape(deepchem.models.tensorgraph.layers.Layer):
 
 class ShapePool(deepchem.models.tensorgraph.layers.Layer):
 
-  def __init__(self, padding='SAME', **kwargs):
+  def __init__(self, n_filter=None, padding='SAME', **kwargs):
+    self.n_filter = n_filter
     self.padding = padding
     super(ShapePool, self).__init__(**kwargs)
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     inputs = self._get_input_tensors(in_layers)
     shape_orig = inputs[0]
+    if self.n_filter is None:
+      n_filter = shape_orig[3]*2
+    else:
+      n_filter = self.n_filter
     if self.padding == 'VALID':
       out_tensor = tf.stack([shape_orig[0],
                              shape_orig[1]/2,
                              shape_orig[2]/2,
-                             shape_orig[3]*2], 0)
+                             n_filter], 0)
     elif self.padding == 'SAME':
       out_tensor = tf.stack([shape_orig[0],
                              tf.to_int32(tf.ceil(tf.to_float(shape_orig[1])/2)),
                              tf.to_int32(tf.ceil(tf.to_float(shape_orig[2])/2)),
-                             shape_orig[3]*2], 0)
+                             n_filter], 0)
     else:
       raise ValueError("padding not supported")
     if set_tensors:
@@ -111,8 +116,27 @@ class AminoAcidPad(deepchem.models.tensorgraph.layers.Layer):
     in_layers = convert_to_layers(in_layers)
 
     AA_features = in_layers[0].out_tensor
-    Pad_features = tf.random_normal((4, self.embedding_length))
+    Pad_features = tf.Variable(tf.random_normal((4, self.embedding_length)))
     out_tensor = tf.concat([Pad_features[:1, :], AA_features[:20, :], Pad_features[1:, :], AA_features[20:, :]], axis=0)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class WeightedL2Loss(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self, in_layers=None, **kwargs):
+    super(WeightedL2Loss, self).__init__(in_layers, **kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    guess = in_layers[0].out_tensor
+    label = in_layers[1].out_tensor
+    weights = in_layers[2].out_tensor
+    out_tensor = tf.reduce_sum(tf.square(guess - label), axis=1, keep_dims=True) * weights 
+    out_tensor = tf.reduce_sum(out_tensor)
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
