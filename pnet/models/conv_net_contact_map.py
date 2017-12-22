@@ -126,10 +126,10 @@ class ConvNetContactMapBase(TensorGraph):
       n_input, self.gather_out_layer = self.GatherModule(n_input, self.conv2d_out_layer)
 
       # 1D loss
-      oneD_prediction = Dense(2, in_layers=[self.conv1d_out_layer])
-      self.oneD_prediction = Reshape((None, 2), in_layers=[oneD_prediction])
+      oneD_prediction = Dense(3, in_layers=[self.conv1d_out_layer])
+      self.oneD_prediction = Reshape((None, 3), in_layers=[oneD_prediction])
       self.add_output(self.oneD_prediction)
-      self.oneD_labels = Label(shape=(None, 2))
+      self.oneD_labels = Label(shape=(None, 3))
       self.oneD_weights = Weights(shape=(None, 1))
       self.oneD_cost = WeightedL2Loss(in_layers=[self.oneD_prediction, 
                                                  self.oneD_labels, 
