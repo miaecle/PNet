@@ -63,7 +63,7 @@ def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=Tr
   elif mode == "blastp":
     path, e = blastp_local(dataset, evalue=evalue)
   elif mode == "hhblits":
-    path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
+    path, path2 = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
     e = None
   msa = load_msa_from_aln(path, e=e)
   if reload:

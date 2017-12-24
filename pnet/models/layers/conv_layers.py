@@ -482,15 +482,17 @@ class Outer1DTo2DLayer(Layer):
     input_features = in_layers[0].out_tensor
     max_n_res = tf.reduce_max(in_layers[1].out_tensor, keep_dims=True)
     
-    tensor1 = tf.expand_dims(input_features, axis=1)
-    max_n_res1 = tf.concat([tf.constant([1]), max_n_res, tf.constant([1]), tf.constant([1])], axis=0)
-    tensor1 = tf.tile(tensor1, max_n_res1)
+    indices1 = tf.reshape(tf.tile(tf.expand_dims(tf.range(max_n_res), 1), (1, max_n_res)), (-1,))
+    indices2 = tf.reshape(tf.tile(tf.range(max_n_res), (max_n_res,)), (-1,))
+    indices3 = tf.to_int32(tf.to_float(indices1+indices2)/2)
+    indices4 = tf.to_int32(tf.ceil(tf.to_float(indices1+indices2)/2))
+
+    tensor1 = tf.gather(input_features, indices=tf.reshape(indices1, (max_n_res, max_n_res)), axis=1)
+    tensor2 = tf.gather(input_features, indices=tf.reshape(indices2, (max_n_res, max_n_res)), axis=1)
+    tensor3 = tf.gather(input_features, indices=tf.reshape(indices3, (max_n_res, max_n_res)), axis=1)
+    tensor4 = tf.gather(input_features, indices=tf.reshape(indices4, (max_n_res, max_n_res)), axis=1)
     
-    tensor2 = tf.expand_dims(input_features, axis=2)
-    max_n_res2 = tf.concat([tf.constant([1]), tf.constant([1]), max_n_res, tf.constant([1])], axis=0)
-    tensor2 = tf.tile(tensor2, max_n_res2)
-    
-    out_tensor = tf.concat([tensor1, tensor2], axis=3)
+    out_tensor = tf.concat([tensor1, (tensor3 + tensor4)/2, tensor2], axis=3)
 
     if len(in_layers) > 2:
       flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)

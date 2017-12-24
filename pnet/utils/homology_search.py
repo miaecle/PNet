@@ -53,7 +53,7 @@ def blastp_local(dataset, database='nr', data_dir=None, evalue=0.001):
   flag = system_call(command)
   return os.path.join(save_dir, 'results.aln'), hit_e
 
-def psiblast_local(dataset, database='nr', data_dir=None, evalue=0.001, num_iterations=2):
+def psiblast_local(dataset, database='nr', data_dir=None, evalue=0.001, num_iterations=3):
   save_dir = tempfile.mkdtemp()
   pnet.utils.write_dataset(dataset, os.path.join(save_dir, 'temp.seq'))
   if data_dir is None:
@@ -101,7 +101,10 @@ def hhblits_local(dataset, database='uniprot20_2016_02', data_dir=None,
             ' - cpu ' + str(num_threads) + ' -n ' + str(num_iterations) + \
             ' -e ' + str(evalue)
   flag = system_call(command)
-  command = 'reformat.pl a3m clu ' + os.path.join(save_dir, 'results.a3m') + \
+  command = 'reformat.pl -r a3m clu ' + os.path.join(save_dir, 'results.a3m') + \
             ' ' + os.path.join(save_dir, 'results.clu')
   flag = system_call(command)
-  return os.path.join(save_dir, 'results.clu')
+  command = 'reformat.pl -r a3m fas ' + os.path.join(save_dir, 'results.a3m') + \
+            ' ' + os.path.join(save_dir, 'results.fas')
+  flag = system_call(command)
+  return os.path.join(save_dir, 'results.clu'), os.path.join(save_dir, 'results.fas')
