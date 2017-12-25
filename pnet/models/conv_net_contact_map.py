@@ -141,17 +141,17 @@ class ConvNetContactMapBase(TensorGraph):
       if self.mode == "classification":
         softmax = SoftMax(in_layers=[self.gather_out_layer], name='softmax_pred')
         #self.add_output(softmax)
-        self.contact_labels = Label(shape=(None, 2), name='labels')
-        self.contact_weights = Weights(shape=(None, 1), name='weights')
-        cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer], name='cost')
-        self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced')
+        self.contact_labels = Label(shape=(None, 2), name='labels_c')
+        self.contact_weights = Weights(shape=(None, 1), name='weights_c')
+        cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer], name='cost_c')
+        self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced_c')
       elif self.mode == "regression":
         #self.add_output(self.gather_out_layer)
-        self.contact_labels = Label(shape=(None, 1), name='labels')
-        self.contact_weights = Weights(shape=(None, 1), name='weights')
+        self.contact_labels = Label(shape=(None, 1), name='labels_r')
+        self.contact_weights = Weights(shape=(None, 1), name='weights_r')
         cost = WeightedL2Loss(in_layers=[self.gather_out_layer, 
                                          self.contact_labels, 
-                                         self.contact_weights], name='cost')
+                                         self.contact_weights], name='cost_r')
         self.cost_balanced = cost
       
       self.all_cost = Add(weights=[1., self.weight1D], 
@@ -512,29 +512,7 @@ class ConvNetContactMapBase(TensorGraph):
   
 class ConvNetContactMap(ConvNetContactMapBase):
   def __init__(self,
-               filter_size_1D=[17]*6,
-               n_filter_1D=[6]*6,
-               filter_size_2D=[3]*10,
-               n_filter_2D=list(range(35, 65, 5))+[60]*4,
                **kwargs):
-    """
-    Parameters:
-    -----------
-    filter_size_1D: list, optional
-      structure of 1D convolution: size of convolution
-    n_filter_1D: list, optional
-      structure of 1D convolution: depths of convolution
-    filter_size_2D: list, optional
-      structure of 2D convolution: size of convolution
-    n_filter_2D: list, optional
-      structure of 2D convolution: depths of convolution
-    """
-    self.filter_size_1D = filter_size_1D
-    self.n_filter_1D = n_filter_1D
-    assert len(n_filter_1D) == len(filter_size_1D)
-    self.filter_size_2D = filter_size_2D
-    self.n_filter_2D = n_filter_2D
-    assert len(n_filter_2D) == len(filter_size_2D)
     super(ConvNetContactMap, self).__init__(**kwargs)
 
   def Conv1DModule(self, n_input, in_layer):
@@ -547,18 +525,18 @@ class ConvNetContactMap(ConvNetContactMapBase):
         n_input_feat=n_input,
         n_output_feat=64,
         n_size=7,
-        in_layers=[in_layer, self.res_flag_1D, self.training_placeholder]))
+        in_layers=[in_layer, self.res_flag_1D, self.training_placeholder], name='global_conv_1'))
     
     in_layer = self.conv_1D_layers[-1]
     n_input = 64
     
     for i in range(3):
       # n_input = 64
-      n_input, in_layer = self.Res1DModule_b(n_input, in_layer, size=17)
+      n_input, in_layer = self.Res1DModule_b(n_input, in_layer, size=17, name='Res1D_Module0_'+str(i)+'_')
     
     for i in range(5):
       # n_input = 64
-      n_input, in_layer = self.Res1DModule_b(n_input, in_layer)
+      n_input, in_layer = self.Res1DModule_b(n_input, in_layer, name='Res1D_Module1_'+str(i)+'_')
 
     return n_input, in_layer
     
@@ -566,17 +544,17 @@ class ConvNetContactMap(ConvNetContactMapBase):
   def OuterModule(self, n_input, in_layer):
     # Add transform layer from 1D sequences to 2D sequences
     self.outer = Outer1DTo2DLayer(
-        in_layers=[in_layer, self.n_residues, self.res_flag_2D])
+        in_layers=[in_layer, self.n_residues, self.res_flag_2D], name='global_outer')
     n_input = n_input*3
     in_layer = self.outer
     return n_input, in_layer
 
   def Conv2DModule(self, n_input, in_layer):
     # n_input = 96
-    n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D)
+    n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
     for i in range(20):
       # n_input = 96
-      n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D)
+      n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer
 
   def GatherModule(self, n_input, in_layer):
@@ -588,5 +566,5 @@ class ConvNetContactMap(ConvNetContactMapBase):
     self.gather_layer = ContactMapGather(
         n_input_feat=n_input,
         n_output=n_output,
-        in_layers=[in_layer, self.res_flag_2D])
+        in_layers=[in_layer, self.res_flag_2D], name='global_gather')
     return n_output, self.gather_layer
