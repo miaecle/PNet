@@ -95,7 +95,8 @@ def hhblits_local(dataset, database='uniprot20_2016_02', data_dir=None,
   pnet.utils.write_dataset(dataset, os.path.join(save_dir, 'temp.seq'))
   if data_dir is None:
     data_dir = os.environ['HH_DATA_DIR']
-  command = 'hhblits -i ' + os.path.join(save_dir, 'temp.seq') + \
+  command = 'hhblits -maxfilt 100000 -realign_max 100000 -all -B 100000' +
+            ' -Z 100000 -i ' + os.path.join(save_dir, 'temp.seq') + \
             ' -d ' + os.path.join(data_dir, database) + \
             ' -oa3m ' + os.path.join(save_dir, 'results.a3m') + \
             ' - cpu ' + str(num_threads) + ' -n ' + str(num_iterations) + \
