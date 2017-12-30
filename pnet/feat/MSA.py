@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import numpy as np
 import csv
+import Bio.SeqIO
 from pnet.utils import blastp_local, psiblast_local, hhblits_local
 from pnet.utils.amino_acids import AminoAcid
 
@@ -25,15 +26,19 @@ def to_one_hot(y, n_classes=25):
   y_hot[np.arange(n_samples), y.astype(np.int64)] = 1
   return y_hot
 
-def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload=True):
+def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload=True):
   """ Load multiple sequence alignment features(position frequency matrix) """
-  msa = form_msa(dataset, mode=mode,
-                 evalue=evalue,
-                 num_iterations=num_iterations,
-                 reload=reload)
-  sequences = [[AminoAcid[res.upper()] for res in msa._hit_sequences[i]] for i in range(len(msa._hit_sequences))]
+  msa_path = form_msa(dataset, mode=mode,
+                      evalue=evalue,
+                      num_iterations=num_iterations,
+                      reload=reload)
+  with open(msa_path, 'r') as f:
+    sequences = [[AminoAcid[res.upper()] for res in record.seq.tostring()] for record in Bio.SeqIO.parse(f, 'fasta')]
+  with open(msa_path, 'r') as f:
+    for first_record in Bio.SeqIO.parse(f, 'fasta'):
+      break
   # Valid residue index
-  index = [i for i, res in enumerate(msa.master_sequence) if res != '-']
+  index = [i for i, res in enumerate(first_record.seq.tostring()) if res != '-']
   sequences = np.transpose(np.array(sequences))[index, :]
   def to_one_hot(res):
     result = np.zeros((25))
@@ -49,115 +54,19 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=2, reload
       pfm[i, :] = pfm[i, :]/total_count
   return pfm
 
-def form_msa(dataset, mode="psiblast", evalue=0.001, num_iterations=2, reload=True):
+def form_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload=True):
   """Generate multiple sequence alignment for a single sample(sequence)"""
   assert len(dataset.sequences) == 1, "Only support one sample"
   # Support psiblast, blastp
   data_dir = os.environ['PNET_DATA_DIR']
-  msa_file = os.path.join(data_dir, 'MSA_All/'+dataset.IDs[0]+'.msa')
+  msa_file = os.path.join(data_dir, 'MSA_ALL/'+dataset.IDs[0]+'.fas')
   if os.path.exists(msa_file) and reload:
-    # Load from file
-    return load_msa(msa_file)
+    return msa_file
   if mode == "psiblast":
     path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
   elif mode == "blastp":
     path, e = blastp_local(dataset, evalue=evalue)
   elif mode == "hhblits":
-    path, path2 = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
+    _, path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
     e = None
-  msa = load_msa_from_aln(path, e=e)
-  if reload:
-    write_msa(msa, msa_file)
-  return load_msa_from_aln(path, e=e)
-
-def load_msa_from_aln(path, e=None):
-  """ ClustalW .aln file loader """
-  with open(path, 'r') as f:
-    raw = f.readlines()
-  lines = [line.split() for line in raw]
-  #lengths = map(len, lines)
-  start_pos = []
-  end_pos = []
-  start = False
-  for i, line in enumerate(raw[1:]):
-    if line[0] != '\n' and line[0] != ' ' and start == False:
-      start_pos.append(i+1)
-      start = True
-    if (line[0] == '\n' or line[0] == ' ') and start == True:
-      end_pos.append(i+1)
-      start = False
-  num_hits = np.unique(np.array(end_pos)-np.array(start_pos))
-  assert len(num_hits) == 1
-  num_blocks = len(start_pos)
-  sequences = ['']*num_hits[0]
-  IDs = list(np.array(lines[start_pos[0]:end_pos[0]])[:, 0])
-  for i in range(num_blocks):
-    seq_add = np.array(lines[start_pos[i]:end_pos[i]])[:, 1]
-    for j in range(len(seq_add)):
-      sequences[j] = sequences[j] + seq_add[j]
-  return MultipleSequenceAlignment(IDs, sequences, e=e, path=path)
-
-def load_msa(path):
-  """ Load msa(customized class) from file """
-  df = pd.read_csv(path, header=None)
-  IDs = df[0].tolist()
-  sequences = df[1].tolist()
-  if len(df.columns) == 3:
-    e = df[2].tolist()
-    e = e[1:]
-  else:
-    e = None
-  return MultipleSequenceAlignment(IDs, sequences, e=e, path=None)
-
-def write_msa(msa_dataset, path):
-  """ Write msa(customized class) to file """
-  IDs = msa_dataset.hit_IDs
-  sequences = msa_dataset.hit_sequences
-  e = msa_dataset.e
-  n_hits = len(IDs)
-  if len(e)>0 and max(e) > 0:
-    write_e = True
-    e = np.insert(e, 0, 0)
-  else:
-    write_e = False
-  with open(path, 'w') as f:
-    writer = csv.writer(f)
-    for i in range(n_hits):
-      out_line = [IDs[i], sequences[i]]
-      if write_e:
-        out_line.append(e[i])
-      writer.writerow(out_line)
-
-class MultipleSequenceAlignment(object):
-  """
-  class for MSA
-  """
-  def __init__(self, hit_IDs, hit_sequences, e=None, path=None):
-    """Hold information of master sequence(and ID), all hits above evalue"""
-    self._hit_IDs = list(hit_IDs)
-    self._hit_sequences = list(hit_sequences)
-    self.master_ID = self._hit_IDs[0]
-    self.master_sequence = self._hit_sequences[0]
-    # Number of alignments should exclude master sequence
-    self.n_alignments = len(self._hit_IDs) - 1
-    self.path = path
-    if e is None:
-      self._e = [0] * self.n_alignments
-    else:
-      self._e = list(e)
-      assert len(self._e) == self.n_alignments
-
-  @property
-  def hit_IDs(self):
-    """ Get IDs as np.array"""
-    return np.array(self._hit_IDs)
-
-  @property
-  def hit_sequences(self):
-    """ Get sequences as np.array"""
-    return np.array(self._hit_sequences)
-
-  @property
-  def e(self):
-    """ Get sequences as np.array"""
-    return np.array(self._e)
+  return path
