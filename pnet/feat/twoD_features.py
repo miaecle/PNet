@@ -70,15 +70,16 @@ def mutual_information(dataset):
       with open(msa_path, 'r') as f:
         for first_record in Bio.SeqIO.parse(f, 'fasta'):
           break
-      index = [i for i, res in enumerate(first_record.seq.tostring()) if res != '-']
+      index = [j for j, res in enumerate(first_record.seq.tostring()) if res != '-']
       sequences = np.array(sequences)[:, index]
     
       num_res = len(index)
       feed_dict = {n_res: num_res}
       out_ct_1D = np.zeros((num_res, 21))
       out_ct_2D = np.zeros((num_res, num_res, 21, 21))
-    
+      
       n_batch = sequences.shape[0]//20+1
+      print(dataset._IDs[i] +': ' + str(num_res) + ', ' + str(sequences.shape[0]))
       for j in range(n_batch):
         if j==n_batch-1:
           feed_dict[inputs] = sequences[j*20:, :]
