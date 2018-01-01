@@ -67,9 +67,11 @@ class SequenceDataset(object):
     if self.load_pdb:
       self.load_structures()
     self.X_built = False
+    self.twoD_X_built = False
     self.y_built = False
     self.oneD_y_built = False
     self.X_on_disk = False
+    self.twoD_X_on_disk = False
     self.y_on_disk = False
     self.oneD_y_on_disk = False
 
@@ -403,6 +405,13 @@ class SequenceDataset(object):
       else:
         result.X = [self.X[i] for i in index]
       result.X_built = True
+    if self.twoD_X_built:
+      if self.twoD_X_on_disk:
+        result.twoD_X = self.pick_Xyw(index, self.twoD_X, identifier='twoD_X')
+        result.twoD_X_on_disk = True
+      else:
+        result.twoD_X = [self.twoD_X[i] for i in index]
+      result.twoD_X_built = True
     if self.y_built:
       if self.y_on_disk:
         result.y = self.pick_Xyw(index, self.y, identifier='y')
@@ -443,8 +452,17 @@ class SequenceDataset(object):
       feat = pnet.feat.generate_raw
     return [feat(self.select_by_index([i])) for i in range(self.n_samples)]
 
+  def fetch_2D_features(self, feat='CCMpred'):
+    """ Fetch certain features for all samples as a list """
+    if feat == 'CCMpred':
+      feat = pnet.feat.CCMpred
+    elif feat == 'MI_MCP':
+      feat = pnet.feat.MI_MCP
+    return feat(self)
+
   def build_features(self, feat_list, file_size=1000, reload=True, path=None):
     """ Build X based on specified list of features """
+    self.build_2D_features(reload=reload, path=path)
     if not path is None:
       path = os.path.join(path, '_'.join(feat_list))
       path = os.path.join(path, 'X')
@@ -462,6 +480,24 @@ class SequenceDataset(object):
     if reload and not path is None:
       self.save_joblib(self.X, path, file_size=file_size)
 
+  def build_2D_features(self, feat_list=['CCMpred', 'MI_MCP'], file_size=1000, reload=True, path=None):
+    """ Build X based on specified list of features """
+    if not path is None:
+      path = os.path.join(path, '_'.join(feat_list))
+      path = os.path.join(path, 'twoD_X')
+      if reload and os.path.exists(path + '0.joblib'):
+        self.twoD_X = self.load_joblib(path)
+        self.twoD_X_built = True
+        self.twoD_X_on_disk = True
+        return
+    if not feat_list.__class__ is list:
+      feat_list = [feat_list]
+    twoD_X = [self.fetch_2D_features(feat=feature) for feature in feat_list]
+    self.twoD_X = [np.concatenate([twoD_X[i][j] for i in range(len(feat_list))], axis=2) for j in range(self.n_samples)]
+    self.twoD_X_built = True
+    if reload and not path is None:
+      self.save_joblib(self.twoD_X, path, file_size=file_size)
+      
   @property
   def n_features(self):
     """ Return number of features for each sample,
@@ -572,6 +608,7 @@ class SequenceDataset(object):
     """Object that iterates over minibatches from the dataset.
     """
     assert self.X_built, "Dataset not ready for training, features must be built"
+    assert self.twoD_X_built, "Dataset not ready for training, 2D features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
     assert self.oneD_y_built, "Dataset not ready for training, 1D labels must be built"
     def iterate(dataset, batch_size, deterministic=True, pad_batches=False, on_disk=True):
@@ -585,28 +622,30 @@ class SequenceDataset(object):
       interval_points = np.arange(np.ceil(float(n_samples) / batch_size) + 1) * batch_size
       interval_points[-1] = n_samples
       if on_disk:
-        current_end = [0, 0, 0, 0, 0]
-        current_start = [0, 0, 0, 0, 0]
-        current_files = [0, 0, 0, 0, 0]
-        file_sizes = [1000, 500, 500, 500, 500]
+        current_end = [0, 0, 0, 0, 0, 0]
+        current_start = [0, 0, 0, 0, 0, 0]
+        current_files = [0, 0, 0, 0, 0, 0]
+        file_sizes = [1000, 1000, 500, 500, 500, 500]
         assert batch_size < min(file_sizes)
         X_all = []
+        twoD_X_all = []
         y_all = []
         w_all = []
         oneD_y_all = []
         oneD_w_all = []
         if not deterministic:
-          X, y, w, oneD_y, oneD_w = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path)
+          X, twoD_X, y, w, oneD_y, oneD_w = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path)
           sample_perm = np.arange(n_samples)
           deterministic = True
         else:
-          X, y, w, oneD_y, oneD_w = dataset.X, dataset.y, dataset.w, dataset.oneD_y, dataset.oneD_w
+          X, twoD_X, y, w, oneD_y, oneD_w = dataset.X, dataset.twoD_X, dataset.y, dataset.w, dataset.oneD_y, dataset.oneD_w
 
       for j in range(len(interval_points) - 1):
         indices = range(int(interval_points[j]), int(interval_points[j + 1]))
         perm_indices = sample_perm[indices]
         if not on_disk:
           out_X = [X[i] for i in perm_indices]
+          out_twoD_X = [twoD_X[i] for i in perm_indices]
           out_y = [y[i] for i in perm_indices]
           out_w = [w[i] for i in perm_indices]
           out_oneD_y = [oneD_y[i] for i in perm_indices]
@@ -624,64 +663,75 @@ class SequenceDataset(object):
             if len(X_all) > 2*file_sizes[0]:
               del X_all[0:file_sizes[0]]
               current_start[0] = current_start[0] + file_sizes[0]
-          # y
+          # twoD_X
           while current_end[1] <= index_end:
-            y_new = pnet.utils.load_from_joblib(y[current_files[1]])
+            twoD_X_new = pnet.utils.load_from_joblib(X[current_files[1]])
             current_files[1] = current_files[1] + 1
-            current_end[1] = current_end[1] + len(y_new)
-            y_all.extend(y_new)
-            if len(y_all) > 2*file_sizes[1]:
-              del y_all[0:file_sizes[1]]
+            current_end[1] = current_end[1] + len(twoD_X_new)
+            twoD_X_all.extend(twoD_X_new)
+            if len(twoD_X_all) > 2*file_sizes[1]:
+              del twoD_X_all[0:file_sizes[1]]
               current_start[1] = current_start[1] + file_sizes[1]
-          # w
+          # y
           while current_end[2] <= index_end:
-            w_new = pnet.utils.load_from_joblib(w[current_files[2]])
+            y_new = pnet.utils.load_from_joblib(y[current_files[2]])
             current_files[2] = current_files[2] + 1
-            current_end[2] = current_end[2] + len(w_new)
-            w_all.extend(w_new)
-            if len(w_all) > 2*file_sizes[2]:
-              del w_all[0:file_sizes[2]]
+            current_end[2] = current_end[2] + len(y_new)
+            y_all.extend(y_new)
+            if len(y_all) > 2*file_sizes[2]:
+              del y_all[0:file_sizes[2]]
               current_start[2] = current_start[2] + file_sizes[2]
-          # oneD_y
+          # w
           while current_end[3] <= index_end:
-            oneD_y_new = pnet.utils.load_from_joblib(oneD_y[current_files[3]])
+            w_new = pnet.utils.load_from_joblib(w[current_files[3]])
             current_files[3] = current_files[3] + 1
-            current_end[3] = current_end[3] + len(oneD_y_new)
-            oneD_y_all.extend(oneD_y_new)
-            if len(oneD_y_all) > 2*file_sizes[3]:
-              del oneD_y_all[0:file_sizes[3]]
+            current_end[3] = current_end[3] + len(w_new)
+            w_all.extend(w_new)
+            if len(w_all) > 2*file_sizes[3]:
+              del w_all[0:file_sizes[3]]
               current_start[3] = current_start[3] + file_sizes[3]
-          # oneD_w
+          # oneD_y
           while current_end[4] <= index_end:
-            oneD_w_new = pnet.utils.load_from_joblib(oneD_w[current_files[4]])
+            oneD_y_new = pnet.utils.load_from_joblib(oneD_y[current_files[4]])
             current_files[4] = current_files[4] + 1
-            current_end[4] = current_end[4] + len(oneD_w_new)
-            oneD_w_all.extend(oneD_w_new)
-            if len(oneD_w_all) > 2*file_sizes[4]:
-              del oneD_w_all[0:file_sizes[4]]
+            current_end[4] = current_end[4] + len(oneD_y_new)
+            oneD_y_all.extend(oneD_y_new)
+            if len(oneD_y_all) > 2*file_sizes[4]:
+              del oneD_y_all[0:file_sizes[4]]
               current_start[4] = current_start[4] + file_sizes[4]
+          # oneD_w
+          while current_end[5] <= index_end:
+            oneD_w_new = pnet.utils.load_from_joblib(oneD_w[current_files[5]])
+            current_files[5] = current_files[5] + 1
+            current_end[5] = current_end[5] + len(oneD_w_new)
+            oneD_w_all.extend(oneD_w_new)
+            if len(oneD_w_all) > 2*file_sizes[5]:
+              del oneD_w_all[0:file_sizes[5]]
+              current_start[5] = current_start[5] + file_sizes[5]
               
           out_X = [X_all[i - current_start[0]] for i in perm_indices]
-          out_y = [y_all[i - current_start[1]] for i in perm_indices]
-          out_w = [w_all[i - current_start[2]] for i in perm_indices]
-          out_oneD_y = [oneD_y_all[i - current_start[3]] for i in perm_indices]
-          out_oneD_w = [oneD_w_all[i - current_start[4]] for i in perm_indices]
+          out_twoD_X = [twoD_X_all[i - current_start[1]] for i in perm_indices]
+          out_y = [y_all[i - current_start[2]] for i in perm_indices]
+          out_w = [w_all[i - current_start[3]] for i in perm_indices]
+          out_oneD_y = [oneD_y_all[i - current_start[4]] for i in perm_indices]
+          out_oneD_w = [oneD_w_all[i - current_start[5]] for i in perm_indices]
 
         if pad_batches:
-          out_X, out_y, out_w, out_oneD_y, out_oneD_w = dataset.pad_batch(
-              batch_size, dataset.n_features, out_X, out_y, out_w, out_oneD_y, out_oneD_w)
-        yield out_X, out_y, out_w, out_oneD_y, out_oneD_w
+          out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w = dataset.pad_batch(
+              batch_size, dataset.n_features, out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w)
+        yield out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w
     assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
     return iterate(self, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
 
   @staticmethod
-  def pad_batch(batch_size, n_features, X, y, w, oneD_y, oneD_w):
+  def pad_batch(batch_size, n_features, X, twoD_X, y, w, oneD_y, oneD_w):
     """Pads batch to have size of batch_size
     """
     num_samples = len(X)
     assert num_samples <= batch_size
     if num_samples < batch_size:
       X.extend([np.zeros((2, n_features))] * (batch_size - num_samples))
+      twoD_X.extend([np.zeros((2, 2, 4))] * (batch_size - num_samples))
       if isinstance(y[0][0, 0], bool):
         y.extend([np.array(np.zeros((2, 2)), dtype=bool)] * (batch_size - num_samples))
       else:
@@ -702,11 +752,13 @@ class SequenceDataset(object):
     if path is None:
       path = tempfile.mkdtemp()
       paths = [os.path.join(path, 'X'),
+               os.path.join(path, 'twoD_X'),
                os.path.join(path, 'y'),
                os.path.join(path, 'w'),
                os.path.join(path, 'oneD_y'),
                os.path.join(path, 'oneD_w')]
     for i, original_paths in enumerate([dataset.X, 
+                                        dataset.twoD_X,
                                         dataset.y, 
                                         dataset.w, 
                                         dataset.oneD_y,
@@ -724,7 +776,8 @@ class SequenceDataset(object):
            dataset.load_joblib(paths[1]), \
            dataset.load_joblib(paths[2]), \
            dataset.load_joblib(paths[3]), \
-           dataset.load_joblib(paths[4])
+           dataset.load_joblib(paths[4]), \
+           dataset.load_joblib(paths[5])
 
   def pick_Xyw(self, sample_perm, data_list, path=None, identifier='X'):
     """ Reordering the X, y, w in the dataset according to sample_perm
@@ -750,16 +803,19 @@ class SequenceDataset(object):
       n_samples = dataset.get_num_samples()
       if on_disk:
         current_X = 0
+        current_twoD_X = 0
         current_y = 0
         current_w = 0
         current_oneD_y = 0
         current_oneD_w = 0
         current_X_file = 0
+        current_twoD_X_file = 0
         current_y_file = 0
         current_w_file = 0
         current_oneD_y_file = 0
         current_oneD_w_file = 0
         X_all = []
+        twoD_X_all = []
         y_all = []
         w_all = []
         oneD_y_all = []
@@ -767,13 +823,18 @@ class SequenceDataset(object):
 
       for i in range(n_samples):
         if not on_disk:
-          yield self.X[i], self.y[i], self.w[i], self.oneD_y[i], self.oneD_w[i]
+          yield self.X[i], self.twoD_X[i], self.y[i], self.w[i], self.oneD_y[i], self.oneD_w[i]
         else:
           while current_X <= i:
             X_new = pnet.utils.load_from_joblib(self.X[current_X_file])
             current_X_file = current_X_file + 1
             current_X = current_X + len(X_new)
             X_all.extend(X_new)
+          while current_twoD_X <= i:
+            twoD_X_new = pnet.utils.load_from_joblib(self.twoD_X[current_twoD_X_file])
+            current_twoD_X_file = current_twoD_X_file + 1
+            current_twoD_X = current_twoD_X + len(twoD_X_new)
+            twoD_X_all.extend(twoD_X_new)
           while current_y <= i:
             y_new = pnet.utils.load_from_joblib(self.y[current_y_file])
             current_y_file = current_y_file + 1
@@ -794,7 +855,7 @@ class SequenceDataset(object):
             current_oneD_w_file = current_oneD_w_file + 1
             current_oneD_w = current_oneD_w + len(oneD_w_new)
             oneD_w_all.extend(oneD_w_new)
-          yield X_all[i], y_all[i], w_all[i], oneD_y_all[i], oneD_w_all[i]
+          yield X_all[i], twoD_X_all[i], y_all[i], w_all[i], oneD_y_all[i], oneD_w_all[i]
     assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
     return sample_iterate(self, on_disk=self.X_on_disk)
 

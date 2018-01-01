@@ -45,6 +45,7 @@ class ConvNetContactMapBase(TensorGraph):
   """Base Class for Convolutional network contact map prediction"""
   def __init__(self,
                n_res_feat=56,
+               n_res_2D_feat=4,
                embedding=True,
                embedding_length=100,
                max_n_res=1000,
@@ -72,6 +73,7 @@ class ConvNetContactMapBase(TensorGraph):
       build symmetry matrix(False) or upper-triangular matrix(True)
     """
     self.n_res_feat = n_res_feat
+    self.n_res_2D_feat = n_res_2D_feat
     self.embedding = embedding
     self.embedding_length = embedding_length
     self.max_n_res = max_n_res
@@ -101,6 +103,7 @@ class ConvNetContactMapBase(TensorGraph):
     """ Build graph structure """
     with self._get_tf("Graph").as_default():
       self.res_features = Feature(shape=(self.batch_size, None, self.n_res_feat), name='res_features')
+      self.res_2D_features = Feature(shape=(self.batch_size, None, None, self,n_res_2D_feat), name='res_2D_features')
       self.training_placeholder = Feature(shape=(), dtype=tf.bool, name='training_placeholder')
       # Placeholder for valid index
       self.res_flag_1D = Feature(shape=(self.batch_size, None), dtype=tf.int32, name='flag_1D')
@@ -140,13 +143,13 @@ class ConvNetContactMapBase(TensorGraph):
       # Add loss layer
       if self.mode == "classification":
         softmax = SoftMax(in_layers=[self.gather_out_layer], name='softmax_pred')
-        #self.add_output(softmax)
+        self.add_output(softmax)
         self.contact_labels = Label(shape=(None, 2), name='labels_c')
         self.contact_weights = Weights(shape=(None, 1), name='weights_c')
         cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer], name='cost_c')
         self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced_c')
       elif self.mode == "regression":
-        #self.add_output(self.gather_out_layer)
+        self.add_output(self.gather_out_layer)
         self.contact_labels = Label(shape=(None, 1), name='labels_r')
         self.contact_weights = Weights(shape=(None, 1), name='weights_r')
         cost = WeightedL2Loss(in_layers=[self.gather_out_layer, 
@@ -167,7 +170,7 @@ class ConvNetContactMapBase(TensorGraph):
                         **kwargs):
     """ Transform each batch into corresponding feed_dict """
     for epoch in range(epochs):
-      for (X_b, y_b, w_b, oneD_y_b, oneD_w_b) in dataset.iterbatches(
+      for (X_b, twoD_X_b, y_b, w_b, oneD_y_b, oneD_w_b) in dataset.iterbatches(
           batch_size=self.batch_size,
           deterministic=True,
           pad_batches=pad_batches):
@@ -229,6 +232,13 @@ class ConvNetContactMapBase(TensorGraph):
           res_flag_2D.append(np.array(flag_2D))
           res_features.append(np.pad(seq_feat, ((0, max_n_res - n_res), (0, 0)), 'constant'))
         
+        res_2D_features = []
+        for ids, twoD_feat in enumerate(twoD_X_b):
+          n_res = n_residues[ids]
+          # Padding
+          res_2D_features.append(np.pad(twoD_feat, ((0, max_n_res - n_res), (0, max_n_res - n_res), (0, 0)), 'constant'))
+          
+          
         if not self.res_features.out_tensor is None:
           feed_dict[self.res_features] = np.stack(res_features, axis=0)
         if not self.res_flag_1D.out_tensor is None:
@@ -237,6 +247,8 @@ class ConvNetContactMapBase(TensorGraph):
           feed_dict[self.res_flag_2D] = np.stack(res_flag_2D, axis=0)
         if not self.n_residues.out_tensor is None:
           feed_dict[self.n_residues] = np.array(n_residues)
+        if not self.res_2D_features.out_tensor is None:
+          feed_dict[self.res_2D_features] = np.stack(res_2D_features, axis=0)
         yield feed_dict
 
   def evaluate(self, dataset, metrics):
@@ -544,16 +556,17 @@ class ConvNetContactMap(ConvNetContactMapBase):
   def OuterModule(self, n_input, in_layer):
     # Add transform layer from 1D sequences to 2D sequences
     self.outer = Outer1DTo2DLayer(
-        in_layers=[in_layer, self.n_residues, self.res_flag_2D], name='global_outer')
-    n_input = n_input*3
+        in_layers=[in_layer, self.n_residues, self.res_flag_2D, self.res_2D_features], name='global_outer')
+    # n_input = 196
+    n_input = n_input*3+self.n_res_2D_feat
     in_layer = self.outer
     return n_input, in_layer
 
   def Conv2DModule(self, n_input, in_layer):
-    # n_input = 96
+    # n_input = 98
     n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
     for i in range(20):
-      # n_input = 96
+      # n_input = 98
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer
 

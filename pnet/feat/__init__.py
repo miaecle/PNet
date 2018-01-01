@@ -8,3 +8,4 @@ Created on Wed Jun 14 15:18:24 2017
 
 from MSA import generate_raw, form_msa, generate_msa
 from SS_SA import generate_ss, generate_sa, load_ss, load_sa, write_ss, write_sa
+from twoD_features import CCMpred, MI_MCP

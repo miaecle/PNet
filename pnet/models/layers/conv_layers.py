@@ -467,7 +467,9 @@ class Conv2DASPP(Layer):
 class Outer1DTo2DLayer(Layer):
 
   def __init__(self,
+               features_2D=True,
                **kwargs):
+    self.features_2D = features_2D
     super(Outer1DTo2DLayer, self).__init__(**kwargs)
 
   def build(self):
@@ -493,7 +495,9 @@ class Outer1DTo2DLayer(Layer):
     tensor4 = tf.gather(input_features, indices=tf.reshape(indices4, (max_n_res, max_n_res)), axis=1)
     
     out_tensor = tf.concat([tensor1, (tensor3 + tensor4)/2, tensor2], axis=3)
-
+    if self.features_2D:
+      features_2D = in_layers[3].out_tensor
+      out_tensor = tf.concat([out_tensor, features_2D], axis=3)
     if len(in_layers) > 2:
       flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
       out_tensor = out_tensor * tf.to_float(flag)
