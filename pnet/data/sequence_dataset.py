@@ -465,6 +465,8 @@ class SequenceDataset(object):
     self.build_2D_features(reload=reload, path=path)
     if not path is None:
       path = os.path.join(path, '_'.join(feat_list))
+      if not os.path.exists(path):
+        os.mkdir(path)
       path = os.path.join(path, 'X')
       if reload and os.path.exists(path + '0.joblib'):
         self.X = self.load_joblib(path)
@@ -484,6 +486,8 @@ class SequenceDataset(object):
     """ Build X based on specified list of features """
     if not path is None:
       path = os.path.join(path, '_'.join(feat_list))
+      if not os.path.exists(path):
+        os.mkdir(path)
       path = os.path.join(path, 'twoD_X')
       if reload and os.path.exists(path + '0.joblib'):
         self.twoD_X = self.load_joblib(path)
@@ -665,7 +669,7 @@ class SequenceDataset(object):
               current_start[0] = current_start[0] + file_sizes[0]
           # twoD_X
           while current_end[1] <= index_end:
-            twoD_X_new = pnet.utils.load_from_joblib(X[current_files[1]])
+            twoD_X_new = pnet.utils.load_from_joblib(twoD_X[current_files[1]])
             current_files[1] = current_files[1] + 1
             current_end[1] = current_end[1] + len(twoD_X_new)
             twoD_X_all.extend(twoD_X_new)
@@ -741,7 +745,7 @@ class SequenceDataset(object):
       oneD_y.extend([np.zeros((2, 2))] * (batch_size - num_samples))
       oneD_w.extend([np.zeros((2,))] * (batch_size - num_samples))
     
-    return X, y, w, oneD_y, oneD_w
+    return X, twoD_X, y, w, oneD_y, oneD_w
 
   @staticmethod
   def reorder_Xyw(sample_perm, dataset, path=None):

@@ -48,7 +48,6 @@ class ConvNetContactMapBase(TensorGraph):
                n_res_2D_feat=4,
                embedding=True,
                embedding_length=100,
-               max_n_res=1000,
                mode="classification",
                uppertri=True,
                learning_rate=1e-5,
@@ -65,8 +64,6 @@ class ConvNetContactMapBase(TensorGraph):
       type) to variable embedding
     embedding_length: int, optional
       length of embedding
-    max_n_res: int, optional
-      maximum number of residues, used for padding
     mode: string, optional
       classification or regression
     uppertri: bool, optional
@@ -76,7 +73,6 @@ class ConvNetContactMapBase(TensorGraph):
     self.n_res_2D_feat = n_res_2D_feat
     self.embedding = embedding
     self.embedding_length = embedding_length
-    self.max_n_res = max_n_res
     self.mode = mode
     self.uppertri = uppertri
     self.weight1D = weight1D
@@ -103,7 +99,7 @@ class ConvNetContactMapBase(TensorGraph):
     """ Build graph structure """
     with self._get_tf("Graph").as_default():
       self.res_features = Feature(shape=(self.batch_size, None, self.n_res_feat), name='res_features')
-      self.res_2D_features = Feature(shape=(self.batch_size, None, None, self,n_res_2D_feat), name='res_2D_features')
+      self.res_2D_features = Feature(shape=(self.batch_size, None, None, self.n_res_2D_feat), name='res_2D_features')
       self.training_placeholder = Feature(shape=(), dtype=tf.bool, name='training_placeholder')
       # Placeholder for valid index
       self.res_flag_1D = Feature(shape=(self.batch_size, None), dtype=tf.int32, name='flag_1D')
@@ -159,7 +155,7 @@ class ConvNetContactMapBase(TensorGraph):
       
       self.all_cost = Add(weights=[1., self.weight1D], 
                           in_layers=[self.cost_balanced, self.oneD_cost], name='all_cost')
-      self.set_loss(self.all_cost)
+      self.set_loss(self.cost_balanced)
       return 
 
   def default_generator(self,
@@ -258,19 +254,28 @@ class ConvNetContactMapBase(TensorGraph):
     """
     w_all = []
     y_all = []
-    for _, y, w, _, _ in dataset.itersamples():
+    for _, _, y, w, _, _ in dataset.itersamples():
       w_all.append(np.sign(w))
       y_all.append(y)
 
     # Retrieve prediction label
     y_pred = self.predict_proba(dataset)
-    y_pred = self.rebuild_contact_map(y_pred, dataset)
+    if len(y_pred) == 2:
+      y_pred = y_pred[1]
     # Mask all predictions and labels with valid index
     results = {}
     for metric in metrics:
       results[metric.name] = metric.compute_metric(y_all, y_pred, w=w_all)
     return results
 
+  def predict_proba(self, dataset):
+    gen = self.default_generator(dataset)
+    y_pred = []
+    for feed_dict in gen:
+      y_pred.append(self.session.run(self.outputs[-1], feed_dict=feed_dict))
+    y_pred = np.concatenate(y_pred, 0)
+    return y_pred
+    
   def rebuild_contact_map(self, y_pred, dataset):
     n_residues = [len(seq) for seq in dataset._sequences]
     preds_out = []
@@ -535,19 +540,19 @@ class ConvNetContactMap(ConvNetContactMapBase):
 
     self.conv_1D_layers.append(Conv1DLayer(
         n_input_feat=n_input,
-        n_output_feat=64,
+        n_output_feat=32,
         n_size=7,
         in_layers=[in_layer, self.res_flag_1D, self.training_placeholder], name='global_conv_1'))
     
     in_layer = self.conv_1D_layers[-1]
-    n_input = 64
+    n_input = 32
     
-    for i in range(3):
-      # n_input = 64
+    for i in range(2):
+      # n_input = 32
       n_input, in_layer = self.Res1DModule_b(n_input, in_layer, size=17, name='Res1D_Module0_'+str(i)+'_')
     
-    for i in range(5):
-      # n_input = 64
+    for i in range(3):
+      # n_input = 32
       n_input, in_layer = self.Res1DModule_b(n_input, in_layer, name='Res1D_Module1_'+str(i)+'_')
 
     return n_input, in_layer
@@ -557,16 +562,16 @@ class ConvNetContactMap(ConvNetContactMapBase):
     # Add transform layer from 1D sequences to 2D sequences
     self.outer = Outer1DTo2DLayer(
         in_layers=[in_layer, self.n_residues, self.res_flag_2D, self.res_2D_features], name='global_outer')
-    # n_input = 196
+    # n_input = 100
     n_input = n_input*3+self.n_res_2D_feat
     in_layer = self.outer
     return n_input, in_layer
 
   def Conv2DModule(self, n_input, in_layer):
-    # n_input = 98
+    # n_input = 50
     n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
-    for i in range(20):
-      # n_input = 98
+    for i in range(8):
+      # n_input = 50
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer
 

@@ -62,13 +62,12 @@ def MI_MCP(dataset):
   
   out = []
   for i in range(dataset.n_samples):  
-    MI_file = data_dir+'/MI_ALL/'+dataset._IDs[i]+'.mi'
+    MI_file = data_dir+'/MI_ALL/'+dataset._IDs[i]+'_mi_mcp.joblib'
     if os.path.exists(MI_file):
       dat = joblib.load(MI_file)
-      freq_1D = dat[0]
-      freq_2D = dat[1]
-      out.append(np.concatenate([mutual_information(freq_1D, freq_2D), 
-                                 mean_contact_potential(freq_1D, freq_2D)], axis=2))
+      MI = dat[0]
+      MCP = dat[1]
+      out.append(np.concatenate([MI, MCP], axis=2))
     else:
       try:
         msa_path = form_msa(dataset.select_by_index(i))
@@ -97,10 +96,11 @@ def MI_MCP(dataset):
           out_ct_2D += sess.run(ct_2D, feed_dict=feed_dict)
         freq_1D = out_ct_1D/sequences.shape[0]
         freq_2D = np.reshape(out_ct_2D, (num_res, num_res, 21*21))/sequences.shape[0]
-    
-        joblib.dump([freq_1D, freq_2D], MI_file)
-        out.append(np.concatenate([mutual_information(freq_1D, freq_2D), 
-                                   mean_contact_potential(freq_1D, freq_2D)], axis=2))
+        
+        MI = mutual_information(freq_1D, freq_2D)
+        MCP = mean_contact_potential(freq_1D, freq_2D)
+        joblib.dump([MI, MCP], MI_file)
+        out.append(np.concatenate([MI, MCP], axis=2))
       except:
         continue
   return out

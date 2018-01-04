@@ -166,17 +166,17 @@ class top_k_accuracy(object):
     _, partition_index = np.unique(y[:, 1], return_index=True)
     partition_index = list(partition_index)
     partition_index.append(len(y[:, 1]))
-    for i in range(w.shape[1]):
+    for j in range(w.shape[1]):
       # Masking of different ranges
-      y_eval = y_pred[:, 1] * np.sign(w[:, i])
+      y_eval = y_pred[:, 1] * np.sign(w[:, j])
       # Divide into separate partitions
       y_partition = [y_eval[partition_index[i]:partition_index[i+1]] for i in range(len(partition_index)-1)]
       out = []
       for sample in y_partition:
-        n_residues = np.sqrt(len(sample))
+        n_residues = np.floor(np.sqrt(len(sample)*2))
         # Number of predictions in evaluation
         n_eval = (n_residues/self.k).astype(int)
         out.append(np.greater(sample, sorted(sample)[-n_eval-1]) * 1)
       out = np.concatenate(out, 0)
-      scores.append(sum(out * y[:, 0])/sum(out))
+      scores.append(sum(out * y[:, 0])/min(sum(out), sum(y[:,0]*w[:, j])))
     return scores

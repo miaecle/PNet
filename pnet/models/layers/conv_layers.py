@@ -482,7 +482,7 @@ class Outer1DTo2DLayer(Layer):
     
     self.build()
     input_features = in_layers[0].out_tensor
-    max_n_res = tf.reduce_max(in_layers[1].out_tensor, keep_dims=True)
+    max_n_res = tf.reduce_max(in_layers[1].out_tensor)
     
     indices1 = tf.reshape(tf.tile(tf.expand_dims(tf.range(max_n_res), 1), (1, max_n_res)), (-1,))
     indices2 = tf.reshape(tf.tile(tf.range(max_n_res), (max_n_res,)), (-1,))
