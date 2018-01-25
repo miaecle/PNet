@@ -739,15 +739,17 @@ class Conv2DBilinearUp(Layer):
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
-'''
+
 class TriangleInequality(Layer):
   
   def __init__(self,
+               rate=500.,
                **kwargs):
+    self.rate = rate
     super(TriangleInequality, self).__init__(**kwargs)
     
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
-    """ parent layers: input_features, output_shape, output_flag
+    """ parent layers: distance, n_residues
     """
     if in_layers is None:
       in_layers = self.in_layers
@@ -757,16 +759,26 @@ class TriangleInequality(Layer):
     dist_map = tf.exp(in_layers[0].out_tensor)
     n_residues = in_layers[1].out_tensor
     
-    test_indice = tf.arange
+    # Only test neighbouring residues
+    test_indice = tf.range(n_residues[0]-2)
+    test_indice = tf.stack([test_indice,   #i
+                            test_indice+1, #j 
+                            test_indice+1, #j
+                            test_indice+2, #k
+                            test_indice,   #i
+                            test_indice+2], axis=1) # k
+    test_indice = tf.reshape(test_indice, [-1, 3, 2])
     
+    # indice for distance(i,j) is n*i - i(i+1)/2 + (j-i) - 1
+    dist_map_indice = n_residues[0]*test_indice[:, :, 0] - \
+        (test_indice[:, :, 0] + 1)*test_indice[:, :, 0]//2 + \
+        (test_indice[:, :, 1] - test_indice[:, :, 0]) - 1
     
-    out_shape = in_layers[1].out_tensor
-    out_tensor = tf.image.resize_bilinear(input_features, out_shape[1:3])
-    if len(in_layers) > 2:
-      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
-      out_tensor = out_tensor * tf.to_float(flag)
+    dist = tf.gather(dist_map[0, :], dist_map_indice)
+    
+    penalty = tf.nn.relu(2 * tf.reduce_max(dist, axis=1) - tf.reduce_sum(dist, axis=0))
+    out_tensor = penalty * self.rate * 10. / tf.reduce_max(dist_map)
       
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
-'''

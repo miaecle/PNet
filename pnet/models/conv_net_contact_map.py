@@ -316,9 +316,12 @@ class ConvNetContactMapBase(TensorGraph):
     sigmoid = Sigmoid(in_layers=[logits_out], name='softmax_pred')
     self.add_output(sigmoid)
     
-    #physical_loss = TriangleInequality(in_layers=[final_dense, self.n_residues], name='triangle_inequality')
+    physical_loss = TriangleInequality(rate=500., in_layers=[final_dense, self.n_residues], name='triangle_inequality')
+
+    classification_loss = Add(weights=[1., 1.], 
+                              in_layers=[contact_cost_balanced, physical_loss], name='all_classification_loss')
     
-    return 1, contact_cost_balanced
+    return 1, classification_loss
   
   
   def RegressionLossModule(self, n_input, in_layer):
