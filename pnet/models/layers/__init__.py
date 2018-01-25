@@ -6,6 +6,7 @@ from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
 import deepchem
 from deepchem.models.tensorgraph.layers import convert_to_layers
 import tensorflow as tf
+import numpy as np
 
 class Expand_dim(deepchem.models.tensorgraph.layers.Layer):
 
@@ -137,6 +138,62 @@ class WeightedL2Loss(deepchem.models.tensorgraph.layers.Layer):
     weights = in_layers[2].out_tensor
     out_tensor = tf.reduce_sum(tf.square(guess - label), axis=1, keep_dims=True) * weights 
     out_tensor = tf.reduce_sum(out_tensor)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+  
+class AddThreshold(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self, in_layers=None, **kwargs):
+    super(AddThreshold, self).__init__(in_layers, **kwargs)
+
+  def build(self):
+    self.threshold = tf.Variable(initial_value=np.log(0.8))
+    
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+    log_dist_pred = in_layers[0].out_tensor
+    out_tensor = log_dist_pred - self.threshold
+    
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+  
+class SigmoidLoss(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self, in_layers=None, **kwargs):
+    super(SigmoidLoss, self).__init__(in_layers, **kwargs)
+    
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    labels = in_layers[0].out_tensor[:, 1]
+    logits = in_layers[1].out_tensor
+    out_tensor = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels, logits=logits)
+    
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
+
+  def __init__(self, in_layers=None, **kwargs):
+    super(Sigmoid, self).__init__(in_layers, **kwargs)
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    if len(in_layers) != 1:
+      raise ValueError("Sigmoid must have a single input layer.")
+    parent = in_layers[0].out_tensor
+    out_tensor = tf.nn.sigmoid(parent)
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor

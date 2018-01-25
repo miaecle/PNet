@@ -8,6 +8,9 @@ Created on Tue Jun 20 21:28:44 2017
 import numpy as np
 import tensorflow as tf
 import pickle
+import time
+import threading
+
 import deepchem as dc
 from rdkit import Chem
 from deepchem.feat.mol_graphs import ConvMol
@@ -19,7 +22,7 @@ from deepchem.models.tensorgraph.layers import Input, Dense, \
 from deepchem.models.tensorgraph.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \
-    WeightedL2Loss
+    WeightedL2Loss, AddThreshold, SigmoidLoss, Sigmoid, TriangleInequality
 from pnet.utils.amino_acids import AminoAcid_SMILES
 
 def to_one_hot(y, n_classes=2):
@@ -53,6 +56,7 @@ class ConvNetContactMapBase(TensorGraph):
                learning_rate=1e-5,
                learning_rate_decay=0.96,
                weight1D=1.,
+               n_batches=32,
                **kwargs):
     """
     Parameters:
@@ -87,6 +91,7 @@ class ConvNetContactMapBase(TensorGraph):
                                                     global_step, 
                                                     10000, 
                                                     learning_rate_decay)
+    self.n_batches = n_batches
     self.set_optimizer(Adam(learning_rate=self.learning_rate,
                             beta1=0.9, 
                             beta2=0.999, 
@@ -138,24 +143,14 @@ class ConvNetContactMapBase(TensorGraph):
       
       # Add loss layer
       if self.mode == "classification":
-        softmax = SoftMax(in_layers=[self.gather_out_layer], name='softmax_pred')
-        self.add_output(softmax)
-        self.contact_labels = Label(shape=(None, 2), name='labels_c')
-        self.contact_weights = Weights(shape=(None, 1), name='weights_c')
-        cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer], name='cost_c')
-        self.cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced_c')
+        n_out, self.cost_balanced = self.ClassificationLossModule(n_input, self.gather_out_layer)
       elif self.mode == "regression":
-        self.add_output(self.gather_out_layer)
-        self.contact_labels = Label(shape=(None, 1), name='labels_r')
-        self.contact_weights = Weights(shape=(None, 1), name='weights_r')
-        cost = WeightedL2Loss(in_layers=[self.gather_out_layer, 
-                                         self.contact_labels, 
-                                         self.contact_weights], name='cost_r')
-        self.cost_balanced = cost
-      
+        n_out, self.cost_balanced = self.RegressionLossModule(n_input, self.gather_out_layer)
+        
       self.all_cost = Add(weights=[1., self.weight1D], 
                           in_layers=[self.cost_balanced, self.oneD_cost], name='all_cost')
       self.set_loss(self.cost_balanced)
+      
       return 
 
   def default_generator(self,
@@ -298,6 +293,43 @@ class ConvNetContactMapBase(TensorGraph):
     raise NotImplementedError
   def GatherModule(self, n_input, in_layer):
     raise NotImplementedError
+  
+  def ClassificationLossModule(self, n_input, in_layer):
+    assert n_input == 2
+    softmax = SoftMax(in_layers=[in_layer], name='softmax_pred')
+    self.add_output(softmax)
+    self.contact_labels = Label(shape=(None, 2), name='labels_c')
+    self.contact_weights = Weights(shape=(None, 1), name='weights_c')
+    cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, in_layer], name='cost_c')
+    cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced_c')
+    return 1, cost_balanced
+  
+  def ClassificationLossModule2(self, n_input, in_layer):
+    assert n_input == 2
+    final_dense = Dense(out_channels=1, in_layers=[in_layer], name='final_dense')
+    
+    logits_out = AddThreshold(in_layers=[final_dense], name='logits_out')
+    self.contact_labels = Label(shape=(None, 2), name='labels_c')
+    self.contact_weights = Weights(shape=(None, 1), name='weights_c')
+    contact_cost = SigmoidLoss(in_layers=[self.contact_labels, logits_out], name='cost_c')
+    contact_cost_balanced = WeightedError(in_layers=[contact_cost, self.contact_weights], name='cost_balanced_c')
+    sigmoid = Sigmoid(in_layers=[logits_out], name='softmax_pred')
+    self.add_output(sigmoid)
+    
+    #physical_loss = TriangleInequality(in_layers=[final_dense, self.n_residues], name='triangle_inequality')
+    
+    return 1, contact_cost_balanced
+  
+  
+  def RegressionLossModule(self, n_input, in_layer):
+    assert n_input == 1
+    self.add_output(in_layer)
+    self.contact_labels = Label(shape=(None, 1), name='labels_r')
+    self.contact_weights = Weights(shape=(None, 1), name='weights_r')
+    cost = WeightedL2Loss(in_layers=[in_layer, 
+                                     self.contact_labels, 
+                                     self.contact_weights], name='cost_r')
+    return 1, cost
   
   def amino_acid_embedding(self, name=None):
     if name == None:
@@ -526,6 +558,113 @@ class ConvNetContactMapBase(TensorGraph):
     self.res_layers.append(ResAdd(in_layers=[in_layer_branch1, in_layer_branch2], name=name+'res_add'))
     out_layer = self.res_layers[-1]
     return n_output, out_layer
+
+  def fit(self,
+          dataset,
+          nb_epoch=10,
+          max_checkpoints_to_keep=5,
+          checkpoint_interval=1000,
+          deterministic=False,
+          restore=False,
+          **kwargs):
+    return self.fit_generator(
+        self.default_generator(
+            dataset, epochs=nb_epoch, deterministic=deterministic),
+        max_checkpoints_to_keep, checkpoint_interval, restore)
+
+  def fit_generator(self,
+                    feed_dict_generator,
+                    max_checkpoints_to_keep=5,
+                    checkpoint_interval=1000,
+                    restore=False):
+    """Train this model on data from a generator.
+
+    Parameters
+    ----------
+    feed_dict_generator: generator
+      this should generate batches, each represented as a dict that maps
+      Layers to values.
+    max_checkpoints_to_keep: int
+      the maximum number of checkpoints to keep.  Older checkpoints are discarded.
+    checkpoint_interval: int
+      the frequency at which to write checkpoints, measured in training steps.
+      Set this to 0 to disable automatic checkpointing.
+    restore: bool
+      if True, restore the model from the most recent checkpoint and continue training
+      from there.  If False, retrain the model from scratch.
+    submodel: Submodel
+      an alternate training objective to use.  This should have been created by
+      calling create_submodel().
+
+    Returns
+    -------
+    the average loss over the most recent checkpoint interval
+    """
+    if not self.built:
+      self.build()
+    with self._get_tf("Graph").as_default():
+      time1 = time.time()
+      loss = self.loss
+      
+      opt = self._get_tf('Optimizer')
+      if not self.n_batches is None:
+        tvs = tf.trainable_variables()
+        accum_vars = [tf.Variable(tf.zeros_like(tv.initialized_value())) for tv in tvs]
+      
+        zero_ops = [tv.assign(tf.zeros_like(tv)) for tv in accum_vars]
+        gvs = opt.compute_gradients(self.loss.out_tensor, tvs)
+        accum_ops = [accum_vars[i].assign_add(gv[0]) for i, gv in enumerate(gvs) if gv[0] is not None]      
+        train_step = opt.apply_gradients([(accum_vars[i], gv[1]) for i, gv in enumerate(gvs)])
+      
+        self.session.run(tf.global_variables_initializer())
+      else:
+        train_step = opt.minimize(loss.out_tensor, global_step=self._get_tf("GlobalStep"))
+      
+      if checkpoint_interval > 0:
+        saver = tf.train.Saver(max_to_keep=max_checkpoints_to_keep)
+      if restore:
+        self.restore()
+      avg_loss, n_averaged_batches = 0.0, 0.0
+      n_samples = 0
+      for feed_dict in self._create_feed_dicts(feed_dict_generator, True):
+        n_samples += 1
+        should_log = (self.tensorboard and
+                      n_samples % self.tensorboard_log_frequency == 0)
+
+        if not self.n_batches is None:
+          fetches = accum_ops + [loss.out_tensor]
+        else:
+          fetches = [train_step, loss.out_tensor]
+        if should_log:
+          fetches.append(self._get_tf("summary_op"))
+        fetched_values = self.session.run(fetches, feed_dict=feed_dict)
+        if should_log:
+          self._log_tensorboard(fetched_values[-1])
+          avg_loss += fetched_values[-2]
+        avg_loss += fetched_values[-1]
+        n_averaged_batches += 1
+        self.global_step += 1
+        
+        if not self.n_batches is None and self.global_step % self.n_batches == 0:
+          self.session.run(train_step)
+          self.session.run(zero_ops)
+          
+        if checkpoint_interval > 0 and self.global_step % checkpoint_interval == checkpoint_interval - 1:
+          saver.save(self.session, self.save_file, global_step=self.global_step)
+          avg_loss = float(avg_loss) / n_averaged_batches
+          print('Ending global_step %d: Average loss %g' % (self.global_step,
+                                                            avg_loss))
+          avg_loss, n_averaged_batches = 0.0, 0.0
+      if n_averaged_batches > 0:
+        avg_loss = float(avg_loss) / n_averaged_batches
+      if checkpoint_interval > 0:
+        if n_averaged_batches > 0:
+          print('Ending global_step %d: Average loss %g' % (self.global_step,
+                                                            avg_loss))
+        saver.save(self.session, self.save_file, global_step=self.global_step)
+        time2 = time.time()
+        print("TIMING: model fitting took %0.3f s" % (time2 - time1))
+    return avg_loss
   
 class ConvNetContactMap(ConvNetContactMapBase):
   def __init__(self,

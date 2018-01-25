@@ -75,7 +75,7 @@ class SequenceDataset(object):
     self.y_on_disk = False
     self.oneD_y_on_disk = False
 
-  def load_structures(self, binary=False, threshold=0.8, weight_adjust=1.):
+  def load_structures(self, binary=False, threshold=0.8, weight_base=30., weight_adjust=0.1):
     """
     load pdb structures for samples
     generate 3D coordinates and residue-residue contact map
@@ -178,7 +178,7 @@ class SequenceDataset(object):
           RR[:, invalid_index] = False
           RR_weight_adjust = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
                                     np.stack([np.arange(n_residues)] * n_residues, axis=1))
-          RR_weight_adjust = RR.astype(float) * RR_weight_adjust * weight_adjust
+          RR_weight_adjust = RR.astype(float) * (weight_base + RR_weight_adjust * weight_adjust)
           RR_weight = RR_weight + RR_weight_adjust
           full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
               np.stack([np.arange(n_residues)] * n_residues, axis=1))
@@ -482,7 +482,7 @@ class SequenceDataset(object):
     if reload and not path is None:
       self.save_joblib(self.X, path, file_size=file_size)
 
-  def build_2D_features(self, feat_list=['CCMpred', 'MI_MCP'], file_size=1000, reload=True, path=None):
+  def build_2D_features(self, feat_list=['CCMpred', 'MI_MCP'], file_size=100, reload=True, path=None):
     """ Build X based on specified list of features """
     if not path is None:
       path = os.path.join(path, '_'.join(feat_list))
@@ -513,13 +513,13 @@ class SequenceDataset(object):
     else:
       return self.X[0].shape[1]
 
-  def build_labels(self, task='RR', binary=True, threshold=0.8,
-                   weight_adjust=1., file_size=100, reload=True, path=None):
+  def build_labels(self, task='RR', binary=True, threshold=0.8, weight_base=30., 
+                   weight_adjust=0.1, file_size=100, reload=True, path=None):
     """ Build labels(y and w) for all samples """
     self.build_1D_labels(reload=reload, path=path)
     if not path is None:
       if binary:
-        path = os.path.join(path, 'binary'+str(threshold)+'_'+str(int(weight_adjust)))
+        path = os.path.join(path, 'binary_'+str(threshold)+'_'+str(weight_base)+'_'+str(weight_adjust))
         if not os.path.exists(path):
           os.makedirs(path)
       else:
@@ -537,6 +537,7 @@ class SequenceDataset(object):
     if not self.load_pdb:
       self.load_structures(binary=binary,
                            threshold=threshold,
+                           weight_base=weight_base,
                            weight_adjust=weight_adjust)
     if task == 'RR':
       self.y = self.RRs

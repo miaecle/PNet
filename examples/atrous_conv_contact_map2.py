@@ -37,26 +37,21 @@ model = pnet.models.AtrousConvContactMap(
     n_batches=None,
     model_dir=model_dir)
 
-model.build()
-#model.restore()
-model.fit(train, nb_epoch=15, checkpoint_interval=11498)
+model.restore()
+model.fit(train, nb_epoch=5, checkpoint_interval=11498)
+CASP11 = pnet.utils.load_CASP(11)
+CASP11 = CASPALL.select_by_ID(CASP11._IDs)
+CASP12 = pnet.utils.load_CASP(12)
+CASP12 = CASPALL.select_by_ID(CASP12._IDs)
+print(model_.evaluate(CASPALL, metrics))
+print(model_.evaluate(CASP11, metrics))
+print(model_.evaluate(CASP12, metrics))
 
-model_ = pnet.models.AtrousConvContactMap(
-    n_res_feat=n_features,
-    learning_rate=1e-4,
-    learning_rate_decay=0.95,
-    batch_size=batch_size,
-    use_queue=False,
-    uppertri=True,
-    mode='classification',
-    n_batches=None,
-    model_dir=model_dir)
+metrics2 = [pnet.utils.Metric(pnet.utils.top_k_accuracy(10), mode='classification')]
+print(model_.evaluate(CASP11, metrics2))
+print(model_.evaluate(CASP12, metrics2))
 
-model_.build()
-model_.restore()
-model_.fit(train, nb_epoch=5, checkpoint_interval=11498)
-
-
+model.fit(train, nb_epoch=5, checkpoint_interval=11498)
 CASP11 = pnet.utils.load_CASP(11)
 CASP11 = CASPALL.select_by_ID(CASP11._IDs)
 CASP12 = pnet.utils.load_CASP(12)

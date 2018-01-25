@@ -739,3 +739,34 @@ class Conv2DBilinearUp(Layer):
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
+'''
+class TriangleInequality(Layer):
+  
+  def __init__(self,
+               **kwargs):
+    super(TriangleInequality, self).__init__(**kwargs)
+    
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, output_shape, output_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    print("TriangleInequality only supports batch_size of 1")
+    dist_map = tf.exp(in_layers[0].out_tensor)
+    n_residues = in_layers[1].out_tensor
+    
+    test_indice = tf.arange
+    
+    
+    out_shape = in_layers[1].out_tensor
+    out_tensor = tf.image.resize_bilinear(input_features, out_shape[1:3])
+    if len(in_layers) > 2:
+      flag = tf.expand_dims(in_layers[2].out_tensor, axis=3)
+      out_tensor = out_tensor * tf.to_float(flag)
+      
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+'''
