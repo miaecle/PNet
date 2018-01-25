@@ -1,6 +1,7 @@
 from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
-    Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm
+    Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm, \
+    TriangleInequality
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
 #from conv_layers_torch import TorchResidueEmbedding, TorchOuter, TorchContactMapGather, TorchResAdd
 import deepchem
@@ -148,7 +149,7 @@ class AddThreshold(deepchem.models.tensorgraph.layers.Layer):
     super(AddThreshold, self).__init__(in_layers, **kwargs)
 
   def build(self):
-    self.threshold = tf.Variable(initial_value=np.log(0.8))
+    self.threshold = tf.Variable(initial_value=np.log(0.8), dtype=tf.float32)
     
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     if in_layers is None:
@@ -157,7 +158,7 @@ class AddThreshold(deepchem.models.tensorgraph.layers.Layer):
 
     self.build()
     log_dist_pred = in_layers[0].out_tensor
-    out_tensor = log_dist_pred - self.threshold
+    out_tensor = self.threshold - log_dist_pred
     
     if set_tensors:
       self.out_tensor = out_tensor
@@ -173,8 +174,8 @@ class SigmoidLoss(deepchem.models.tensorgraph.layers.Layer):
       in_layers = self.in_layers
     in_layers = convert_to_layers(in_layers)
 
-    labels = in_layers[0].out_tensor[:, 1]
-    logits = in_layers[1].out_tensor
+    labels = tf.reshape(in_layers[0].out_tensor[:, 1], (-1,))
+    logits = tf.reshape(in_layers[1].out_tensor, (-1,))
     out_tensor = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels, logits=logits)
     
     if set_tensors:
@@ -183,7 +184,8 @@ class SigmoidLoss(deepchem.models.tensorgraph.layers.Layer):
 
 class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
 
-  def __init__(self, in_layers=None, **kwargs):
+  def __init__(self, in_layers=None, return_columns=1, **kwargs):
+    self.return_columns = return_columns
     super(Sigmoid, self).__init__(in_layers, **kwargs)
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
@@ -194,6 +196,8 @@ class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
       raise ValueError("Sigmoid must have a single input layer.")
     parent = in_layers[0].out_tensor
     out_tensor = tf.nn.sigmoid(parent)
+    if self.return_columns == 2:
+      out_tensor = tf.concat([1-out_tensor, out_tensor], axis=1)
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor

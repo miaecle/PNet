@@ -18,7 +18,7 @@ from deepchem.models.tensorgraph.tensor_graph import TensorGraph
 from deepchem.models.tensorgraph.layers import Input, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature, TensorWrapper, GraphConv, GraphPool, GraphGather, Add, \
-    Reshape
+    Reshape, Squeeze
 from deepchem.models.tensorgraph.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \
@@ -300,8 +300,9 @@ class ConvNetContactMapBase(TensorGraph):
     self.add_output(softmax)
     self.contact_labels = Label(shape=(None, 2), name='labels_c')
     self.contact_weights = Weights(shape=(None, 1), name='weights_c')
+    weights = Squeeze(squeeze_dims=1, in_layers=[self.contact_weights])
     cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, in_layer], name='cost_c')
-    cost_balanced = WeightedError(in_layers=[cost, self.contact_weights], name='cost_balanced_c')
+    cost_balanced = WeightedError(in_layers=[cost, weights], name='cost_balanced_c')
     return 1, cost_balanced
   
   def ClassificationLossModule2(self, n_input, in_layer):
@@ -311,9 +312,10 @@ class ConvNetContactMapBase(TensorGraph):
     logits_out = AddThreshold(in_layers=[final_dense], name='logits_out')
     self.contact_labels = Label(shape=(None, 2), name='labels_c')
     self.contact_weights = Weights(shape=(None, 1), name='weights_c')
+    weights = Squeeze(squeeze_dims=1, in_layers=[self.contact_weights])
     contact_cost = SigmoidLoss(in_layers=[self.contact_labels, logits_out], name='cost_c')
-    contact_cost_balanced = WeightedError(in_layers=[contact_cost, self.contact_weights], name='cost_balanced_c')
-    sigmoid = Sigmoid(in_layers=[logits_out], name='softmax_pred')
+    contact_cost_balanced = WeightedError(in_layers=[contact_cost, weights], name='cost_balanced_c')
+    sigmoid = Sigmoid(return_columns=2, in_layers=[logits_out], name='sigmoid_pred')
     self.add_output(sigmoid)
     
     physical_loss = TriangleInequality(rate=500., in_layers=[final_dense, self.n_residues], name='triangle_inequality')

@@ -743,7 +743,7 @@ class Conv2DBilinearUp(Layer):
 class TriangleInequality(Layer):
   
   def __init__(self,
-               rate=500.,
+               rate=100.,
                **kwargs):
     self.rate = rate
     super(TriangleInequality, self).__init__(**kwargs)
@@ -769,15 +769,15 @@ class TriangleInequality(Layer):
                             test_indice+2], axis=1) # k
     test_indice = tf.reshape(test_indice, [-1, 3, 2])
     
-    # indice for distance(i,j) is n*i - i(i+1)/2 + (j-i) - 1
+    # indice for distance(i,j) is n*i - i(i+1)/2 + j
     dist_map_indice = n_residues[0]*test_indice[:, :, 0] - \
         (test_indice[:, :, 0] + 1)*test_indice[:, :, 0]//2 + \
-        (test_indice[:, :, 1] - test_indice[:, :, 0]) - 1
+        test_indice[:, :, 1]
     
-    dist = tf.gather(dist_map[0, :], dist_map_indice)
+    dist = tf.gather(dist_map, dist_map_indice)
     
-    penalty = tf.nn.relu(2 * tf.reduce_max(dist, axis=1) - tf.reduce_sum(dist, axis=0))
-    out_tensor = penalty * self.rate * 10. / tf.reduce_max(dist_map)
+    penalty = tf.nn.relu(2 * tf.reduce_max(dist, axis=1) - tf.reduce_sum(dist, axis=1))
+    out_tensor = tf.reduce_sum(penalty * self.rate * 10. / tf.reduce_max(dist_map))
       
     if set_tensors:
       self.out_tensor = out_tensor
