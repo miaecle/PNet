@@ -186,7 +186,10 @@ class SequenceDataset(object):
         else:
           full_range = np.abs(np.stack([np.arange(n_residues)] * n_residues, axis=0) -
               np.stack([np.arange(n_residues)] * n_residues, axis=1))
-          RR_weight = RR_weight * (1 + full_range * ((full_range - 6 ) >= 0) * weight_adjust)
+          RR_weight = RR_weight + np.clip(full_range * weight_adjust, 0, 0.5) + weight_base * np.exp(-1.25 * RR)
+          RR_weight = RR_weight * ((full_range - 6 ) >= 0)
+          RR_weight[invalid_index, :] = 0
+          RR_weight[:, invalid_index] = 0
         ts.append(t)
         resseqs.append(resseq)
         xyz.append(coordinate)
@@ -523,7 +526,7 @@ class SequenceDataset(object):
         if not os.path.exists(path):
           os.makedirs(path)
       else:
-        path = os.path.join(path, 'continuous')
+        path = os.path.join(path, 'continuous_'+str(weight_base)+'_'+str(weight_adjust))
         if not os.path.exists(path):
           os.makedirs(path)
       path_y = os.path.join(path, 'y')
