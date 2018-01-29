@@ -714,7 +714,7 @@ class ConvNetContactMap(ConvNetContactMapBase):
   def Conv2DModule(self, n_input, in_layer):
     # n_input = 50
     n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
-    for i in range(8):
+    for i in range(16):
       # n_input = 50
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer

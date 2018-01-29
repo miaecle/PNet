@@ -24,11 +24,11 @@ CASPALL.build_labels(path=data_dir_valid, weight_base=50., weight_adjust=0.1, bi
 batch_size = 1
 n_features = CASPALL.n_features
 metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5), mode='classification')]
-model_dir = '/home/zqwu/PNet/built_models/AtrousConv_PDB50selected'
+model_dir = '/home/zqwu/PNet/built_models/AtrousConv_PDB50selected_low_lr'
 
 model = pnet.models.AtrousConvContactMap(
     n_res_feat=n_features,
-    learning_rate=1e-3,
+    learning_rate=1e-4,
     learning_rate_decay=0.95,
     batch_size=batch_size,
     use_queue=False,
