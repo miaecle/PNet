@@ -26,7 +26,8 @@ class Metric(deepchem.metrics.Metric):
   def __init__(self,
                metric,
                name=None,
-               mode=None):
+               mode=None,
+               uppertri=True):
     """
     Args:
       metric: customized function that takes args y_true, y_pred, w and
@@ -41,11 +42,13 @@ class Metric(deepchem.metrics.Metric):
       mode = "classification"
     assert mode in ["classification", "regression"]
     self.mode = mode
+    self.uppertri = uppertri
 
-  @staticmethod
-  def uppertri(y):
+  def uppertri(self, y):
     assert y.shape[0] == y.shape[1]
     assert len(y.shape) >= 2
+    if not self.uppertri:
+      return np.concatenate([y[k, :] for k in range(y.shape[0])], axis=0)
     return np.concatenate([y[k, k:] for k in range(y.shape[0])], axis=0)
   
   def compute_metric(self,
