@@ -74,12 +74,13 @@ class EncodeDecodeContactMap(ConvNetContactMapBase):
   def Conv2DModule(self, n_input, in_layer):
     return self.encode_decode_structure(n_input, in_layer)
 
-  def GatherModule(self, n_input, in_layer):
+  def GatherModule(self, n_input, in_layer, n_output=None):
     # Transform all channels of a single contact to predicitons of contact probability
-    if self.mode == "classification":
-      n_output = 2
-    elif self.mode == "regression":
-      n_output = 1
+    if n_output is None:
+      if self.mode == "classification":
+        n_output = 2
+      elif self.mode == "regression":
+        n_output = 1
     self.gather_layer = ContactMapGather(
         n_input_feat=n_input,
         n_output=n_output,

@@ -129,7 +129,6 @@ class ConvNetContactMapBase(TensorGraph):
       n_input, self.conv1d_out_layer = self.Conv1DModule(n_input, in_layer)
       n_input, self.outer_out_layer = self.OuterModule(n_input, self.conv1d_out_layer)
       n_input, self.conv2d_out_layer = self.Conv2DModule(n_input, self.outer_out_layer)
-      n_input, self.gather_out_layer = self.GatherModule(n_input, self.conv2d_out_layer)
 
       # 1D loss
       oneD_prediction = Dense(3, in_layers=[self.conv1d_out_layer], name='oneD_pred')
@@ -143,9 +142,9 @@ class ConvNetContactMapBase(TensorGraph):
       
       # Add loss layer
       if self.mode == "classification":
-        n_out, self.cost_balanced = self.ClassificationLossModule(n_input, self.gather_out_layer)
+        n_out, self.cost_balanced = self.ClassificationLossModule(n_input, self.conv2d_out_layer)
       elif self.mode == "regression":
-        n_out, self.cost_balanced = self.RegressionLossModule(n_input, self.gather_out_layer)
+        n_out, self.cost_balanced = self.RegressionLossModule(n_input, self.conv2d_out_layer)
         
       self.all_cost = Add(weights=[1., self.weight1D], 
                           in_layers=[self.cost_balanced, self.oneD_cost], name='all_cost')
@@ -295,19 +294,21 @@ class ConvNetContactMapBase(TensorGraph):
     raise NotImplementedError
   
   def ClassificationLossModule(self, n_input, in_layer):
+    n_input, self.gather_out_layer = self.GatherModule(n_input, in_layer)
     assert n_input == 2
-    softmax = SoftMax(in_layers=[in_layer], name='softmax_pred')
+    softmax = SoftMax(in_layers=[self.gather_out_layer], name='softmax_pred')
     self.add_output(softmax)
     self.contact_labels = Label(shape=(None, 2), name='labels_c')
     self.contact_weights = Weights(shape=(None, 1), name='weights_c')
     weights = Squeeze(squeeze_dims=1, in_layers=[self.contact_weights])
-    cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, in_layer], name='cost_c')
+    cost = SoftMaxCrossEntropy(in_layers=[self.contact_labels, self.gather_out_layer], name='cost_c')
     cost_balanced = WeightedError(in_layers=[cost, weights], name='cost_balanced_c')
     return 1, cost_balanced
   
   def ClassificationLossModule2(self, n_input, in_layer):
+    n_input, self.gather_out_layer = self.GatherModule(n_input, in_layer)
     assert n_input == 2
-    final_dense = Dense(out_channels=1, in_layers=[in_layer], name='final_dense')
+    final_dense = Dense(out_channels=1, in_layers=[self.gather_out_layer], name='final_dense')
     
     logits_out = AddThreshold(in_layers=[final_dense], name='logits_out')
     self.contact_labels = Label(shape=(None, 2), name='labels_c')
@@ -327,11 +328,12 @@ class ConvNetContactMapBase(TensorGraph):
   
   
   def RegressionLossModule(self, n_input, in_layer):
+    n_input, self.gather_out_layer = self.GatherModule(n_input, in_layer)
     assert n_input == 1
-    self.add_output(in_layer)
+    self.add_output(self.gather_out_layer)
     self.contact_labels = Label(shape=(None, 1), name='labels_r')
     self.contact_weights = Weights(shape=(None, 1), name='weights_r')
-    cost = WeightedL2Loss(in_layers=[in_layer, 
+    cost = WeightedL2Loss(in_layers=[self.gather_out_layer, 
                                      self.contact_labels, 
                                      self.contact_weights], name='cost_r')
     return 1, cost
@@ -719,12 +721,13 @@ class ConvNetContactMap(ConvNetContactMapBase):
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer
 
-  def GatherModule(self, n_input, in_layer):
+  def GatherModule(self, n_input, in_layer, n_output=None):
     # Transform all channels of a single contact to predicitons of contact probability
-    if self.mode == "classification":
-      n_output = 2
-    elif self.mode == "regression":
-      n_output = 1
+    if n_output is None:
+      if self.mode == "classification":
+        n_output = 2
+      elif self.mode == "regression":
+        n_output = 1
     self.gather_layer = ContactMapGather(
         n_input_feat=n_input,
         n_output=n_output,
