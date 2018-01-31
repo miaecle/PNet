@@ -24,7 +24,7 @@ CASPALL.build_labels(path=data_dir_valid, weight_base=50., weight_adjust=0.1, bi
 
 batch_size = 1
 n_features = CASPALL.n_features
-metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5), mode='classification')]
+metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5, input_mode='regression'))]
 model_dir = '/home/zqwu/PNet/built_models/AtrousConv_PDB50selected_reg'
 
 model = pnet.models.AtrousConvContactMap(
@@ -43,7 +43,7 @@ model.build()
 
 model.fit(train, nb_epoch=25, checkpoint_interval=11498)
 
-""" Not yet ready
+
 CASP11 = pnet.utils.load_CASP(11)
 CASP11 = CASPALL.select_by_ID(CASP11._IDs)
 CASP12 = pnet.utils.load_CASP(12)
@@ -52,7 +52,6 @@ print(model.evaluate(CASPALL, metrics))
 print(model.evaluate(CASP11, metrics))
 print(model.evaluate(CASP12, metrics))
 
-metrics2 = [pnet.utils.Metric(pnet.utils.top_k_accuracy(10), mode='classification')]
+metrics2 = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5, input_mode='regression'))]
 print(model.evaluate(CASP11, metrics2))
 print(model.evaluate(CASP12, metrics2))
-"""
