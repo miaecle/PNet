@@ -183,7 +183,11 @@ class top_k_accuracy(object):
         if self.input_mode == 'classification':
           out.append(np.greater(sample, sorted(sample)[-n_eval-1]) * 1)
         elif self.input_mode == 'regression':
-          threshold = sorted(sample[np.nonzero(sample)[0]])[n_eval]
+          threshold = sorted(sample[np.nonzero(sample)[0]])
+          if len(threshold) == 0:
+            threshold = -1
+          else:
+            threshold = threshold[min(n_eval, len(threshold)-1)]
           inds = np.intersect1d(np.where(sample < threshold)[0], np.where(sample != 0)[0], assume_unique=True)
           y_out = np.zeros_like(sample)
           y_out[inds] = 1.
