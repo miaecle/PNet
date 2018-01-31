@@ -159,8 +159,9 @@ def pnet_prc_auc_score(y, y_pred, w):
 class top_k_accuracy(object):
   """ Accuracy of the top L/k predictions, L is the length of protein
   """
-  def __init__(self, k=5):
+  def __init__(self, k=5, input_mode='classification'):
     self.k = k
+    self.input_mode = input_mode
     self.__name__ = 'top_k_accuracy'
 
   def __call__(self, y, y_pred, w):
@@ -171,7 +172,7 @@ class top_k_accuracy(object):
     partition_index.append(len(y[:, 1]))
     for j in range(w.shape[1]):
       # Masking of different ranges
-      y_eval = y_pred[:, 1] * np.sign(w[:, j])
+      y_eval = y_pred[:, -1] * np.sign(w[:, j])
       # Divide into separate partitions
       y_partition = [y_eval[partition_index[i]:partition_index[i+1]] for i in range(len(partition_index)-1)]
       out = []
@@ -179,7 +180,14 @@ class top_k_accuracy(object):
         n_residues = np.floor(np.sqrt(len(sample)*2))
         # Number of predictions in evaluation
         n_eval = (n_residues/self.k).astype(int)
-        out.append(np.greater(sample, sorted(sample)[-n_eval-1]) * 1)
+        if self.input_mode == 'classification':
+          out.append(np.greater(sample, sorted(sample)[-n_eval-1]) * 1)
+        elif self.input_mode == 'regression':
+          threshold = sorted(sample[np.nonzero(sample)[0]])[n_eval]
+          inds = np.intersect1d(np.where(sample < threshold)[0], np.where(sample != 0)[0], assume_unique=True)
+          y_out = np.zeros_like(sample)
+          y_out[inds] = 1.
+          out.append(y_out)
       out = np.concatenate(out, 0)
       scores.append(sum(out * y[:, 0])/min(sum(out), sum(y[:,0]*w[:, j])))
     return scores
