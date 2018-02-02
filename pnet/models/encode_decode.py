@@ -94,7 +94,8 @@ class EncodeDecodeContactMap(ConvNetContactMapBase):
     self.encode_pool_layers = []
     self.decode_up_layers = []
     self.res_flags = [self.res_flag_2D]
-    self.shortcut_shapes = [ToShape(n_input, self.batch_size, in_layers=[self.n_residues], name='global_to_shape')]
+    # n_input is halved in the end
+    self.shortcut_shapes = [ToShape(n_input/2, self.batch_size, in_layers=[self.n_residues], name='global_to_shape')]
     
     res_flag_2D = self.res_flag_2D
     
