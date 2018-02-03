@@ -23,8 +23,10 @@ CASPALL.build_labels(path=data_dir_valid, weight_base=50., weight_adjust=0.1, bi
 
 batch_size = 1
 n_features = CASPALL.n_features
-metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5), mode='classification')]
-model_dir = '/home/zqwu/PNet/built_models/Conv_PDB50selected'
+UppTri = False
+
+metrics = [pnet.utils.Metric(pnet.utils.top_k_accuracy(5, UppTri=UppTri), mode='classification', UppTri=UppTri)]
+model_dir = '/home/zqwu/PNet/built_models/Conv_PDB50selected_noUpperTri'
 
 model = pnet.models.ConvNetContactMap(
     n_res_feat=n_features,
@@ -32,14 +34,14 @@ model = pnet.models.ConvNetContactMap(
     learning_rate_decay=0.95,
     batch_size=batch_size,
     use_queue=False,
-    uppertri=True,
+    uppertri=UppTri,
     mode='classification',
     n_batches=None,
     model_dir=model_dir)
 
 model.build()
 model.restore()
-model.fit(train, nb_epoch=10, checkpoint_interval=11498)
+#model.fit(train, nb_epoch=19, checkpoint_interval=11498)
 
 CASP11 = pnet.utils.load_CASP(11)
 CASP11 = CASPALL.select_by_ID(CASP11._IDs)
@@ -49,7 +51,7 @@ print(model.evaluate(CASPALL, metrics))
 print(model.evaluate(CASP11, metrics))
 print(model.evaluate(CASP12, metrics))
 
-metrics2 = [pnet.utils.Metric(pnet.utils.top_k_accuracy(10), mode='classification')]
+metrics2 = [pnet.utils.Metric(pnet.utils.top_k_accuracy(10, UppTri=UppTri), mode='classification', UppTri=UppTri)]
 print(model.evaluate(CASP11, metrics2))
 print(model.evaluate(CASP12, metrics2))
 

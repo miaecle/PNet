@@ -159,9 +159,10 @@ def pnet_prc_auc_score(y, y_pred, w):
 class top_k_accuracy(object):
   """ Accuracy of the top L/k predictions, L is the length of protein
   """
-  def __init__(self, k=5, input_mode='classification'):
+  def __init__(self, k=5, input_mode='classification', UppTri=True):
     self.k = k
     self.input_mode = input_mode
+    self.UppTri = UppTri
     self.__name__ = 'top_k_accuracy'
 
   def __call__(self, y, y_pred, w):
@@ -177,7 +178,12 @@ class top_k_accuracy(object):
       y_partition = [y_eval[partition_index[i]:partition_index[i+1]] for i in range(len(partition_index)-1)]
       out = []
       for sample in y_partition:
-        n_residues = np.floor(np.sqrt(len(sample)*2))
+        if self.UppTri:
+          n_residues = np.floor(np.sqrt(len(sample)*2))
+          assert (n_residues + 1) * n_residues / 2 == len(sample)
+        else:
+          n_residues = np.floor(np.sqrt(len(sample)*4))
+          assert n_residues * n_residues == len(sample)
         # Number of predictions in evaluation
         n_eval = (n_residues/self.k).astype(int)
         if self.input_mode == 'classification':
