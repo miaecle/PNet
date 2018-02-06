@@ -264,8 +264,6 @@ class Conv2DLayer(Layer):
       Weight initialization for filters.
     activation: str, optional
       Activation function applied
-    activation_first: bool, optional
-      If to apply activation before convolution
 
     """
     self.init = initializations.get(init)  # Set weight initialization

@@ -3,7 +3,6 @@ from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm, \
     TriangleInequality
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
-#from conv_layers_torch import TorchResidueEmbedding, TorchOuter, TorchContactMapGather, TorchResAdd
 import deepchem
 from deepchem.models.tensorgraph.layers import convert_to_layers
 import tensorflow as tf

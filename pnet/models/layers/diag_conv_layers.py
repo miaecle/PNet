@@ -26,8 +26,6 @@ class DiagConv2DLayer(Layer):
                n_size,
                init='glorot_uniform',
                activation='relu',
-               activation_first=True,
-               dropout=None,
                **kwargs):
     """
     Parameters
@@ -42,8 +40,6 @@ class DiagConv2DLayer(Layer):
       Weight initialization for filters.
     activation: str, optional
       Activation function applied
-    dropout: float, optional
-      Dropout probability, not supported here
 
     """
     self.init = initializations.get(init)  # Set weight initialization
@@ -52,7 +48,6 @@ class DiagConv2DLayer(Layer):
     self.n_output_feat = n_output_feat
     self.n_size = n_size
     assert self.n_size % 2 == 1, "filter size needs to be odd"
-    self.activation_first = activation_first
     super(DiagConv2DLayer, self).__init__(**kwargs)
 
   def build(self):

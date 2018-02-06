@@ -55,8 +55,8 @@ class ConvNetContactMapBase(TensorGraph):
                uppertri=True,
                learning_rate=1e-5,
                learning_rate_decay=0.96,
-               weight1D=1.,
                n_batches=32,
+               oneD_loss=None,
                **kwargs):
     """
     Parameters:
@@ -79,7 +79,7 @@ class ConvNetContactMapBase(TensorGraph):
     self.embedding_length = embedding_length
     self.mode = mode
     self.uppertri = uppertri
-    self.weight1D = weight1D
+    self.oneD_loss = oneD_loss
     super(ConvNetContactMapBase, self).__init__(**kwargs)
     
     self.conv_1D_layers = []
@@ -145,10 +145,12 @@ class ConvNetContactMapBase(TensorGraph):
         n_out, self.cost_balanced = self.ClassificationLossModule(n_input, self.conv2d_out_layer)
       elif self.mode == "regression":
         n_out, self.cost_balanced = self.RegressionLossModule(n_input, self.conv2d_out_layer)
-        
-      self.all_cost = Add(weights=[1., self.weight1D], 
-                          in_layers=[self.cost_balanced, self.oneD_cost], name='all_cost')
-      self.set_loss(self.cost_balanced)
+      if self.oneD_loss is None:
+        self.set_loss(self.cost_balanced) 
+      else:
+        self.all_cost = Add(weights=[1., self.oneD_loss], 
+                            in_layers=[self.cost_balanced, self.oneD_cost], name='all_cost')
+        self.set_loss(self.all_cost)
       
       return 
 

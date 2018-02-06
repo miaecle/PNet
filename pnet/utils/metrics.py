@@ -199,5 +199,5 @@ class top_k_accuracy(object):
           y_out[inds] = 1.
           out.append(y_out)
       out = np.concatenate(out, 0)
-      scores.append(sum(out * y[:, 0])/min(sum(out), sum(y[:,0]*w[:, j])))
+      scores.append(sum(out * y[:, 0])/sum(out))
     return scores
