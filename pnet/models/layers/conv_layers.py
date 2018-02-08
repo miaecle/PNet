@@ -165,6 +165,66 @@ class Conv1DLayer(Layer):
       self.out_tensor = out_tensor
     return out_tensor
  
+class Conv1DLayer_RaptorX(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size,
+               init='glorot_uniform',
+               activation='relu',
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels
+    n_size: int
+      Number of filter size(full length)
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+    activation_first: bool, optional
+      If to apply activation before convolution
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    super(Conv1DLayer_RaptorX, self).__init__(**kwargs)
+
+  def build(self):
+    self.W = self.init([self.n_size, self.n_input_feat, self.n_output_feat])
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    self.build()
+
+    input_features = in_layers[0].out_tensor
+    flag = tf.expand_dims(in_layers[1].out_tensor, axis=2)
+    train_flag = in_layers[2].out_tensor
+    input_features = tf.layers.batch_normalization(input_features, training=train_flag)
+    out_tensor = self.activation(input_features)
+    out_tensor = out_tensor * tf.to_float(flag)
+    
+    out_tensor = tf.nn.conv1d(out_tensor, self.W, stride=1, padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)
+    
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
   
 class Conv1DAtrous(Layer):
 
@@ -306,6 +366,67 @@ class Conv2DLayer(Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
+class Conv2DLayer_RaptorX(Layer):
+
+  def __init__(self,
+               n_input_feat,
+               n_output_feat,
+               n_size,
+               init='glorot_uniform',
+               activation='relu',
+               **kwargs):
+    """
+    Parameters
+    ----------
+    n_input_feat: int
+      Number of input channels
+    n_output_feat: int
+      Number of output channels
+    n_size: int
+      Number of filter size(full length)
+    init: str, optional
+      Weight initialization for filters.
+    activation: str, optional
+      Activation function applied
+
+    """
+    self.init = initializations.get(init)  # Set weight initialization
+    self.activation = activations.get(activation)  # Get activations
+    self.n_input_feat = n_input_feat
+    self.n_output_feat = n_output_feat
+    self.n_size = n_size
+    super(Conv2DLayer_RaptorX, self).__init__(**kwargs)
+
+  def build(self):
+    self.W = self.init([self.n_size, self.n_size, self.n_input_feat, self.n_output_feat])
+    self.b = model_ops.zeros((self.n_output_feat,))
+    self.trainable_weights = [self.W, self.b]
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+
+    self.build()
+    
+    input_features = in_layers[0].out_tensor
+    flag = tf.expand_dims(in_layers[1].out_tensor, axis=3)
+    train_flag = in_layers[2].out_tensor
+    input_features = tf.layers.batch_normalization(input_features, training=train_flag)
+    out_tensor = self.activation(input_features)
+    out_tensor = out_tensor * tf.to_float(flag)
+    
+    out_tensor = tf.nn.conv2d(out_tensor, self.W, strides=[1, 1, 1, 1], padding='SAME')
+    out_tensor = tf.nn.bias_add(out_tensor, self.b)    
+    
+    if set_tensors:
+      self.variables = self.trainable_weights
+      self.out_tensor = out_tensor
+    return out_tensor
+  
+  
 class Conv2DAtrous(Layer):
 
   def __init__(self,

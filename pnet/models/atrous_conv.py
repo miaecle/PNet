@@ -20,10 +20,12 @@ from pnet.models.conv_net_contact_map import to_one_hot, from_one_hot, ConvNetCo
 
 class AtrousConvContactMap(ConvNetContactMapBase):
   def __init__(self,
+               filter_size=3,
                **kwargs):
+    self.filter_size = filter_size
     super(AtrousConvContactMap, self).__init__(**kwargs)
   
-  def Res1DAtrousModule_b(self, n_input, in_layer, rate=2, name=None):
+  def Res1DAtrousModule_b(self, n_input, in_layer, rate=2, size=3, name=None):
     if name == None:
       name = 'Res1DAtrous_same_'+str(self.module_count)+'_'
       self.module_count += 1
@@ -40,7 +42,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     self.conv_1D_layers.append(Conv1DAtrous(
         n_input_feat=n_input//4,
         n_output_feat=n_input//4,
-        n_size=3,
+        n_size=size,
         rate=rate,
         in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_1D_layers[-1]
@@ -57,7 +59,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     out_layer = self.res_layers[-1]
     return n_output, out_layer
 
-  def Res2DAtrousModule_b(self, n_input, in_layer, rate=2, res_flag_2D=None, name=None):
+  def Res2DAtrousModule_b(self, n_input, in_layer, rate=2, res_flag_2D=None, size=3, name=None):
     if name == None:
       name = 'Res2DAtrous_same_'+str(self.module_count)+'_'
       self.module_count += 1
@@ -77,7 +79,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     self.conv_2D_layers.append(Conv2DAtrous(
         n_input_feat=n_input//4,
         n_output_feat=n_input//4,
-        n_size=3,
+        n_size=size,
         rate=rate,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
@@ -159,7 +161,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     for i in range(n_pool_layers):
       for j in range(2):
         # n_input = 52
-        n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Encoding_Module_'+str(i)+'_Submodule_'+str(j)+'_')
+        n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Encoding_Module_'+str(i)+'_Submodule_'+str(j)+'_')
 
       self.shortcut_layers.append(in_layer)
 
@@ -177,15 +179,15 @@ class AtrousConvContactMap(ConvNetContactMapBase):
 
     for i in range(2):
       # n_input = 52
-      n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=2, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(i)+'_Rate_'+str(2)+'_')
-    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=4, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(2)+'_Rate_'+str(4)+'_')
-    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=8, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(3)+'_Rate_'+str(8)+'_')
-    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=16, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(4)+'_Rate_'+str(16)+'_')
+      n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=2, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(i)+'_Rate_'+str(2)+'_')
+    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=4, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(2)+'_Rate_'+str(4)+'_')
+    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=8, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(3)+'_Rate_'+str(8)+'_')
+    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=16, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(4)+'_Rate_'+str(16)+'_')
     
     self.conv_2D_layers.append(Conv2DASPP(
         n_input_feat=n_input,
         n_output_feat=n_input,
-        n_size=3,
+        n_size=self.filter_size,
         rate=[6, 12, 18, 24],
         in_layers=[in_layer, res_flag_2D, self.training_placeholder], name='global_aspp'))
         
@@ -206,10 +208,10 @@ class AtrousConvContactMap(ConvNetContactMapBase):
           self.shortcut_layers[-(j+1)]], name='global_upconcat_'+str(j))
       
       n_input = n_input * 2
-      n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Down_')
+      n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Decoding_Module_'+str(j)+'_Down_')
       for i in range(2):
         # n_input = 52
-        n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Submodule_'+str(i)+'_')
+        n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Decoding_Module_'+str(j)+'_Submodule_'+str(i)+'_')
       
         
     return n_input, in_layer
