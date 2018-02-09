@@ -157,7 +157,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
     
     res_flag_2D = self.res_flag_2D
     for i in range(n_pool_layers):
-      for j in range(2):
+      for j in range(1):
         # n_input = 52
         n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Encoding_Module_'+str(i)+'_Submodule_'+str(j)+'_')
 
@@ -175,20 +175,12 @@ class AtrousConvContactMap(ConvNetContactMapBase):
       self.shortcut_shapes.append(ShapePool(n_filter=n_input, in_layers=[self.shortcut_shapes[-1]], name='global_shape_pool_'+str(i)))
       
 
-    for i in range(2):
+    for i in range(1):
       # n_input = 52
       n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=2, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(i)+'_Rate_'+str(2)+'_')
     n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=4, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(2)+'_Rate_'+str(4)+'_')
     n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=8, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(3)+'_Rate_'+str(8)+'_')
-    n_input, in_layer = self.Res2DAtrousModule_b(n_input, in_layer, rate=16, res_flag_2D=res_flag_2D, name='Res2D_Inter_Module_'+str(4)+'_Rate_'+str(16)+'_')
     
-    self.conv_2D_layers.append(Conv2DASPP(
-        n_input_feat=n_input,
-        n_output_feat=n_input,
-        n_size=3,
-        rate=[6, 12, 18, 24],
-        in_layers=[in_layer, res_flag_2D, self.training_placeholder], name='global_aspp'))
-        
     in_layer = self.conv_2D_layers[-1]
     
     for j in range(n_pool_layers):
@@ -207,7 +199,7 @@ class AtrousConvContactMap(ConvNetContactMapBase):
       
       n_input = n_input * 2
       n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Down_')
-      for i in range(2):
+      for i in range(1):
         # n_input = 52
         n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Submodule_'+str(i)+'_')
       
