@@ -450,7 +450,7 @@ class ConvNetContactMapBase(TensorGraph):
     out_layer = self.res_layers[-1]
     return n_output, out_layer
 
-  def Res2DModule_a(self, n_input, in_layer, res_flag_2D=None, name=None):
+  def Res2DModule_a(self, n_input, in_layer, res_flag_2D=None, size=3, name=None):
     if name == None:
       name = 'Res2D_up_'+str(self.module_count)+'_'
       self.module_count += 1
@@ -475,7 +475,7 @@ class ConvNetContactMapBase(TensorGraph):
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input//2,
         n_output_feat=n_input//2,
-        n_size=3,
+        n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
@@ -491,7 +491,7 @@ class ConvNetContactMapBase(TensorGraph):
     out_layer = self.res_layers[-1]
     return n_output, out_layer
 
-  def Res2DModule_b(self, n_input, in_layer, res_flag_2D=None, name=None):
+  def Res2DModule_b(self, n_input, in_layer, res_flag_2D=None, size=3, name=None):
     if name == None:
       name = 'Res2D_same_'+str(self.module_count)+'_'
       self.module_count += 1
@@ -511,7 +511,7 @@ class ConvNetContactMapBase(TensorGraph):
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input//4,
         n_output_feat=n_input//4,
-        n_size=3,
+        n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
@@ -527,7 +527,7 @@ class ConvNetContactMapBase(TensorGraph):
     out_layer = self.res_layers[-1]
     return n_output, out_layer
 
-  def Res2DModule_c(self, n_input, in_layer, res_flag_2D=None, name=None):
+  def Res2DModule_c(self, n_input, in_layer, res_flag_2D=None, size=3, name=None):
     if name == None:
       name = 'Res2D_down_'+str(self.module_count)+'_'
       self.module_count += 1
@@ -552,7 +552,7 @@ class ConvNetContactMapBase(TensorGraph):
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input//4,
         n_output_feat=n_input//4,
-        n_size=3,
+        n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
@@ -718,7 +718,7 @@ class ConvNetContactMap(ConvNetContactMapBase):
   def Conv2DModule(self, n_input, in_layer):
     # n_input = 50
     n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
-    for i in range(16):
+    for i in range(60):
       # n_input = 50
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_Module'+str(i)+'_')
     return n_input, in_layer

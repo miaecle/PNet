@@ -166,28 +166,29 @@ class top_k_accuracy(object):
     self.__name__ = 'top_k_accuracy'
 
   def __call__(self, y, y_pred, w):
-    scores = []
     # Partition of proteins
     _, partition_index = np.unique(y[:, 1], return_index=True)
     partition_index = list(partition_index)
+    n_samples = len(partition_index)
     partition_index.append(len(y[:, 1]))
+    results = np.zeros((n_samples, w.shape[1]))
     for j in range(w.shape[1]):
       # Masking of different ranges
       y_eval = y_pred[:, -1] * np.sign(w[:, j])
       # Divide into separate partitions
       y_partition = [y_eval[partition_index[i]:partition_index[i+1]] for i in range(len(partition_index)-1)]
-      out = []
-      for sample in y_partition:
+      y_true_partition = [y[partition_index[i]:partition_index[i+1], 0] for i in range(len(partition_index)-1)]
+      for i, sample in enumerate(y_partition):
         if self.UppTri:
           n_residues = np.floor(np.sqrt(len(sample)*2))
           assert (n_residues + 1) * n_residues / 2 == len(sample)
         else:
           n_residues = np.floor(np.sqrt(len(sample)*4))
-          assert n_residues * n_residues == len(sample)
+          assert n_residues * n_residues == 4 * len(sample)
         # Number of predictions in evaluation
         n_eval = (n_residues/self.k).astype(int)
         if self.input_mode == 'classification':
-          out.append(np.greater(sample, sorted(sample)[-n_eval-1]) * 1)
+          pred_out = np.greater(sample, sorted(sample)[-n_eval-1]) * 1
         elif self.input_mode == 'regression':
           threshold = sorted(sample[np.nonzero(sample)[0]])
           if len(threshold) == 0:
@@ -195,9 +196,12 @@ class top_k_accuracy(object):
           else:
             threshold = threshold[min(n_eval, len(threshold)-1)]
           inds = np.intersect1d(np.where(sample < threshold)[0], np.where(sample != 0)[0], assume_unique=True)
-          y_out = np.zeros_like(sample)
-          y_out[inds] = 1.
-          out.append(y_out)
-      out = np.concatenate(out, 0)
-      scores.append(sum(out * y[:, 0])/sum(out))
+          pred_out = np.zeros_like(sample)
+          pred_out[inds] = 1.
+        if sum(pred_out) == 0:
+          results[i, j] = -1
+        else:
+          results[i, j] = sum(pred_out * y_true_partition[i])/float(sum(pred_out))
+    results = [row for row in results if row[0] >= 0]
+    scores = np.mean(results, axis=0)
     return scores
