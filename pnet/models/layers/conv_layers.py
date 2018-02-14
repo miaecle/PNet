@@ -17,7 +17,7 @@ from deepchem.nn import model_ops
 
 from deepchem.models.tensorgraph.layers import Layer
 from deepchem.models.tensorgraph.layers import convert_to_layers
-
+# test
 class BatchNorm(Layer):
 
   def __init__(self, in_layers=None, **kwargs):

@@ -404,12 +404,19 @@ class ConvNetContactMapBase(TensorGraph):
         n_size=size,
         in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_1D_layers[-1]
-    
+
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_1D_layers[-1]    
+
     self.conv_1D_layers.append(Conv1DLayer(
         n_input_feat=n_input//2,
         n_output_feat=n_input*2,
         n_size=1,
-        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a3'))
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a4'))
     in_layer_branch2 = self.conv_1D_layers[-1]
     
     n_output = n_input * 2
@@ -426,23 +433,30 @@ class ConvNetContactMapBase(TensorGraph):
     
     self.conv_1D_layers.append(Conv1DLayer(
         n_input_feat=n_input,
-        n_output_feat=n_input//4,
+        n_output_feat=n_input//2,
         n_size=1,
         in_layers=[in_layer, self.res_flag_1D, self.training_placeholder], name=name+'conv_a1'))
     in_layer_branch2 = self.conv_1D_layers[-1]
     
     self.conv_1D_layers.append(Conv1DLayer(
-        n_input_feat=n_input//4,
-        n_output_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
         n_size=size,
         in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_1D_layers[-1]
-    
+
     self.conv_1D_layers.append(Conv1DLayer(
-        n_input_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_1D_layers[-1]
+
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input//2,
         n_output_feat=n_input,
         n_size=1,
-        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a3'))
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a4'))
     in_layer_branch2 = self.conv_1D_layers[-1]
     
     n_output = n_input
@@ -478,12 +492,19 @@ class ConvNetContactMapBase(TensorGraph):
         n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
-    
+
+    self.conv_2D_layers.append(Conv2DLayer(
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_2D_layers[-1]
+
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input//2,
         n_output_feat=n_input*2,
         n_size=1,
-        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a4'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     n_output = n_input * 2
@@ -503,23 +524,30 @@ class ConvNetContactMapBase(TensorGraph):
     
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input,
-        n_output_feat=n_input//4,
+        n_output_feat=n_input//2,
         n_size=1,
         in_layers=[in_layer, res_flag_2D, self.training_placeholder], name=name+'conv_a1'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     self.conv_2D_layers.append(Conv2DLayer(
-        n_input_feat=n_input//4,
-        n_output_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
         n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     self.conv_2D_layers.append(Conv2DLayer(
-        n_input_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_2D_layers[-1]
+
+    self.conv_2D_layers.append(Conv2DLayer(
+        n_input_feat=n_input//2,
         n_output_feat=n_input,
         n_size=1,
-        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a4'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     n_output = n_input
@@ -544,23 +572,30 @@ class ConvNetContactMapBase(TensorGraph):
     
     self.conv_2D_layers.append(Conv2DLayer(
         n_input_feat=n_input,
-        n_output_feat=n_input//4,
+        n_output_feat=n_input//2,
         n_size=1,
         in_layers=[in_layer, res_flag_2D, self.training_placeholder], name=name+'conv_a1'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     self.conv_2D_layers.append(Conv2DLayer(
-        n_input_feat=n_input//4,
-        n_output_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
         n_size=size,
         in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a2'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     self.conv_2D_layers.append(Conv2DLayer(
-        n_input_feat=n_input//4,
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_2D_layers[-1]
+
+    self.conv_2D_layers.append(Conv2DLayer(
+        n_input_feat=n_input//2,
         n_output_feat=n_input//2,
         n_size=1,
-        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a3'))
+        in_layers=[in_layer_branch2, res_flag_2D, self.training_placeholder], name=name+'conv_a4'))
     in_layer_branch2 = self.conv_2D_layers[-1]
     
     n_output = n_input//2
