@@ -51,13 +51,13 @@ class EncodeDecodeContactMap(ConvNetContactMapBase):
     in_layer = self.conv_1D_layers[-1]
     n_input = self.init_n_filter
     
-    for i in range(2):
+    for i in range(3):
       # n_input = init_n_filter
       n_input, in_layer = self.Res1DModule_b(n_input, in_layer, size=17, name='Res1D_Module0_'+str(i)+'_')
     
     for i in range(3):
       # n_input = init_n_filter
-      n_input, in_layer = self.Res1DModule_b(n_input, in_layer, name='Res1D_Module1_'+str(i)+'_')
+      n_input, in_layer = self.Res1DModule_b(n_input, in_layer, size=7, name='Res1D_Module1_'+str(i)+'_')
 
     return n_input, in_layer
 
@@ -94,17 +94,13 @@ class EncodeDecodeContactMap(ConvNetContactMapBase):
     self.encode_pool_layers = []
     self.decode_up_layers = []
     self.res_flags = [self.res_flag_2D]
-    # n_input is halved in the end
-    self.shortcut_shapes = [ToShape(n_input/2, self.batch_size, in_layers=[self.n_residues], name='global_to_shape')]
+    self.shortcut_shapes = [ToShape(n_input, self.batch_size, in_layers=[self.n_residues], name='global_to_shape')]
     
     res_flag_2D = self.res_flag_2D
     
-    # n_input = 50
-    n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=self.res_flag_2D, name='Res2D_down_')
-    
     for i in range(n_pool_layers):
       for j in range(3):
-        # n_input = 50
+        # n_input = 100
         n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Encoding_Module_'+str(i)+'_Submodule_'+str(j)+'_')
 
       self.shortcut_layers.append(in_layer)
@@ -130,15 +126,15 @@ class EncodeDecodeContactMap(ConvNetContactMapBase):
           in_layers=[in_layer, out_shape, res_flag_2D],
           name='global_upconv_'+str(j)))
       
-      # n_input = 50
+      # n_input = 200
       in_layer = Concat(axis=3, in_layers=[self.decode_up_layers[-1],
           self.shortcut_layers[-(j+1)]], name='global_upconcat_'+str(j))
       
-      # n_input = 50
+      # n_input = 100
       n_input = n_input * 2
       n_input, in_layer = self.Res2DModule_c(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Down_')
       for i in range(2):
-        # n_input = 50
+        # n_input = 100
         n_input, in_layer = self.Res2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, name='Res2D_Decoding_Module_'+str(j)+'_Submodule_'+str(i)+'_')
       
     return n_input, in_layer
