@@ -57,19 +57,17 @@ class CustomConv2DLayer(Layer):
     super(CustomConv2DLayer, self).__init__(**kwargs)
 
   def build(self):
-    self.W = []
     n_size = self.n_size
+    W_trainable = self.init([(n_size+1)*n_size/2, self.n_input_feat, self.n_output_feat])
+    inds = np.ones((n_size, n_size))*-1
+    j = 0
     for i in range(n_size):
-      if i < np.floor(n_size/2):
-        W_effective = tf.Variable(tf.zeros((n_size, self.n_input_feat, self.n_output_feat)), trainable=False)
-      else:
-        W_trainable = self.init([n_size - i, self.n_input_feat, self.n_output_feat])
-        W_before = tf.Variable(tf.zeros((i - int(np.floor(n_size/2.)), self.n_input_feat, self.n_output_feat)), trainable=False)
-        W_after = tf.Variable(tf.zeros((int(np.floor(n_size/2.)), self.n_input_feat, self.n_output_feat)), trainable=False)
-        W_effective = tf.concat([W_before, W_trainable, W_after], 0)
-      self.W.append(W_effective)
+      inds[i, :(n_size-i)] = np.array(range(j, j+n_size-i))
+      j = j+n_size-i
+      for k in range(i):
+        inds[i, -1-k] = inds[k, -1-i]
 
-    self.W = tf.stack(self.W, axis=0)
+    self.W = tf.gather(W_trainable, inds.astype(int))
     self.b = model_ops.zeros((self.n_output_feat,))
     self.trainable_weights = [self.W, self.b]
 
@@ -139,19 +137,17 @@ class CustomConv2DAtrous(Layer):
     super(CustomConv2DAtrous, self).__init__(**kwargs)
 
   def build(self):
-    self.W = []
     n_size = self.n_size
+    W_trainable = self.init([(n_size+1)*n_size/2, self.n_input_feat, self.n_output_feat])
+    inds = np.ones((n_size, n_size))*-1
+    j = 0
     for i in range(n_size):
-      if i < np.floor(n_size/2):
-        W_effective = tf.Variable(tf.zeros((n_size, self.n_input_feat, self.n_output_feat)), trainable=False)
-      else:
-        W_trainable = self.init([n_size - i, self.n_input_feat, self.n_output_feat])
-        W_before = tf.Variable(tf.zeros((i - int(np.floor(n_size/2.)), self.n_input_feat, self.n_output_feat)), trainable=False)
-        W_after = tf.Variable(tf.zeros((int(np.floor(n_size/2.)), self.n_input_feat, self.n_output_feat)), trainable=False)
-        W_effective = tf.concat([W_before, W_trainable, W_after], 0)
-      self.W.append(W_effective)
+      inds[i, :(n_size-i)] = np.array(range(j, j+n_size-i))
+      j = j+n_size-i
+      for k in range(i):
+        inds[i, -1-k] = inds[k, -1-i]
 
-    self.W = tf.stack(self.W, axis=0)
+    self.W = tf.gather(W_trainable, inds.astype(int))
     self.b = model_ops.zeros((self.n_output_feat,))
     self.trainable_weights = [self.W, self.b]
 
@@ -189,7 +185,7 @@ class CustomConv2DAtrous(Layer):
 
 class CustomAtrousConvContactMap(ConvNetContactMapBase):
   def __init__(self,
-               filter_size=5,
+               filter_size=3,
                **kwargs):
     self.filter_size = filter_size
     super(CustomAtrousConvContactMap, self).__init__(**kwargs)
