@@ -901,3 +901,32 @@ class TriangleInequality(Layer):
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
+
+class CoordinatesToDistanceMap(Layer):
+
+  def __init__(self,
+               **kwargs):
+    super(CoordinatesToDistanceMap, self).__init__(**kwargs)
+
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: coordinates, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    # Batch_size * n_residues * 3
+    input_features = in_layers[0].out_tensor
+    # Batch_size * n_residues * n_residues
+    flag = tf.cast(in_layers[1].out_tensor, dtype=tf.bool)
+    max_n_res = tf.reduce_max(in_layers[2].out_tensor)
+    
+    tensor1 = tf.tile(tf.expand_dim(input_features, 1), (1, max_n_res, 1, 1))
+    tensor2 = tf.tile(tf.expand_dim(input_features, 2), (1, 1, max_n_res, 1))
+    
+    distances = tf.norm(tensor1 - tensor2, ord=2, axis=3, keepdims=True)
+    out_tensor = tf.boolean_mask(distances, flag)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor

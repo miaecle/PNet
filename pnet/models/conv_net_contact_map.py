@@ -55,7 +55,7 @@ class ConvNetContactMapBase(TensorGraph):
                uppertri=True,
                learning_rate=1e-5,
                learning_rate_decay=0.96,
-               n_batches=32,
+               n_batches=None,
                oneD_loss=None,
                **kwargs):
     """
