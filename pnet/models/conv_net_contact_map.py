@@ -464,6 +464,50 @@ class ConvNetContactMapBase(TensorGraph):
     out_layer = self.res_layers[-1]
     return n_output, out_layer
 
+  def Res1DModule_c(self, n_input, in_layer, size=3, name=None):
+    if name == None:
+      name = 'Res1D_down_'+str(self.module_count)+'_'
+      self.module_count += 1
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input,
+        n_output_feat=n_input//2,
+        n_size=1,
+        in_layers=[in_layer, self.res_flag_1D, self.training_placeholder], name=name+'conv_b1'))
+    in_layer_branch1 = self.conv_1D_layers[-1]
+    
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input,
+        n_output_feat=n_input//2,
+        n_size=1,
+        in_layers=[in_layer, self.res_flag_1D, self.training_placeholder], name=name+'conv_a1'))
+    in_layer_branch2 = self.conv_1D_layers[-1]
+    
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a2'))
+    in_layer_branch2 = self.conv_1D_layers[-1]
+
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=size,
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a3'))
+    in_layer_branch2 = self.conv_1D_layers[-1]    
+
+    self.conv_1D_layers.append(Conv1DLayer(
+        n_input_feat=n_input//2,
+        n_output_feat=n_input//2,
+        n_size=1,
+        in_layers=[in_layer_branch2, self.res_flag_1D, self.training_placeholder], name=name+'conv_a4'))
+    in_layer_branch2 = self.conv_1D_layers[-1]
+    
+    n_output = n_input // 2
+    self.res_layers.append(ResAdd(in_layers=[in_layer_branch1, in_layer_branch2], name=name+'res_add'))
+    out_layer = self.res_layers[-1]
+    return n_output, out_layer
+
   def Res2DModule_a(self, n_input, in_layer, res_flag_2D=None, size=3, name=None):
     if name == None:
       name = 'Res2D_up_'+str(self.module_count)+'_'

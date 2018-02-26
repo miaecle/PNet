@@ -930,3 +930,21 @@ class CoordinatesToDistanceMap(Layer):
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
+
+class Condense(Layer):
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    input_features = in_layers[0].out_tensor
+    input_features = (input_features + tf.transpose(input_features, perm=[0, 2, 1, 3])) / 2
+    contact_prob = in_layers[1]
+    
+    out_tensor = tf.concat([tf.reduce_max(input_features, axis=2), tf.reduce_sum(input_features * contact_prob, axis=2)], axis=3)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
