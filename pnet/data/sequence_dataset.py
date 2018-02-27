@@ -85,6 +85,7 @@ class SequenceDataset(object):
     ts = []
     resseqs = []
     xyz = []
+    xyz_weights = []
     phis = []
     psis = []
     phi_psi_weights = []
@@ -97,7 +98,8 @@ class SequenceDataset(object):
       if path == 'nan' or pd.isnull(path) or path is None:
         ts.append(None)
         resseqs.append(None)
-        xyz.append(None)
+        xyz.append(np.zeros((n_residues, 3)))
+        xyz_weights.append(np.zeros((n_residues,)))
         phis.append(np.zeros((n_residues,)))
         psis.append(np.zeros((n_residues,)))
         phi_psi_weights.append(np.zeros((n_residues,)))
@@ -158,7 +160,10 @@ class SequenceDataset(object):
 
         # 3D-coordinates
         coordinate = np.zeros((n_residues,3))
+        coordinate_weight = np.zeros((n_residues,))
         coordinate[resseq, :] = t.xyz
+        coordinate_weight[resseq] = 1
+        
 
         RR = np.zeros((n_residues, n_residues, 3))
         RR_weight = np.ones((n_residues, n_residues))
@@ -193,11 +198,13 @@ class SequenceDataset(object):
         ts.append(t)
         resseqs.append(resseq)
         xyz.append(coordinate)
+        xyz_weights.append(coordinate_weight)
         RRs.append(RR)
         RR_weights.append(RR_weight)
     self._structures = ts
     self._resseqs = resseqs
     self.xyz = xyz
+    self.xyz_weights = xyz_weights
     self.calculate_residue_distances(self.xyz)
     self.phis = phis
     self.psis = psis
@@ -574,9 +581,12 @@ class SequenceDataset(object):
         return
     if not self.load_pdb:
       self.load_structures()
-    self.oneD_y = [np.stack([self.distances[i], self.phis[i], self.psis[i]], axis=1) for i in range(self.n_samples)]
-      
-    self.oneD_w = [self.dis_weights[i]*self.phi_psi_weights[i] for i in range(self.n_samples)]
+    #self.oneD_y = [np.stack([self.distances[i], self.phis[i], self.psis[i]], axis=1) for i in range(self.n_samples)]
+    self.oneD_y = self.xyz
+    self.oneD_w = self.xyz_weights
+    for i, y in enumerate(self.oneD_y):
+      if y is None:
+        self.oneD_y[i] = np.zeros((len(self._sequences[i]), 3))
     self.oneD_y_built = True
     if reload and not path is None:
       self.save_joblib(self.oneD_y, path_y, file_size=file_size)
@@ -609,6 +619,7 @@ class SequenceDataset(object):
 
 
   def iterbatches(self,
+                  contact_prob=False,
                   batch_size=None,
                   deterministic=True,
                   pad_batches=False,
@@ -619,7 +630,7 @@ class SequenceDataset(object):
     assert self.twoD_X_built, "Dataset not ready for training, 2D features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
     assert self.oneD_y_built, "Dataset not ready for training, 1D labels must be built"
-    def iterate(dataset, batch_size, deterministic=True, pad_batches=False, on_disk=True):
+    def iterate(dataset, contact_prob, batch_size, deterministic=True, pad_batches=False, on_disk=True):
       n_samples = dataset.get_num_samples()
       if not deterministic:
         sample_perm = np.random.permutation(n_samples)
@@ -729,7 +740,7 @@ class SequenceDataset(object):
               batch_size, dataset.n_features, out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w)
         yield out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w
     assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
-    return iterate(self, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
+    return iterate(self, contact_prob, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
 
   @staticmethod
   def pad_batch(batch_size, n_features, X, twoD_X, y, w, oneD_y, oneD_w):

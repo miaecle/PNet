@@ -19,6 +19,7 @@ from deepchem.models.tensorgraph.layers import Input, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature, TensorWrapper, GraphConv, GraphPool, GraphGather, Add, \
     Reshape, Squeeze
+    
 from deepchem.models.tensorgraph.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \

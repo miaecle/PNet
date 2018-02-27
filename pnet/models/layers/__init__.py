@@ -1,7 +1,7 @@
 from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Outer1DTo2DLayer, ContactMapGather, ResAdd, Conv2DPool, Conv2DUp, \
     Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm, \
-    TriangleInequality, Conv1DLayer_RaptorX, Conv2DLayer_RaptorX, Condense
+    TriangleInequality, Conv1DLayer_RaptorX, Conv2DLayer_RaptorX
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
 import deepchem
 from deepchem.models.tensorgraph.layers import convert_to_layers
@@ -136,7 +136,7 @@ class WeightedL2Loss(deepchem.models.tensorgraph.layers.Layer):
     guess = in_layers[0].out_tensor
     label = in_layers[1].out_tensor
     weights = in_layers[2].out_tensor
-    out_tensor = tf.reduce_sum(tf.square(guess - label), axis=1, keep_dims=True) * weights 
+    out_tensor = tf.reduce_sum(tf.square(guess - label), axis=1, keepdims=True) * weights 
     out_tensor = tf.reduce_sum(out_tensor)
     if set_tensors:
       self.out_tensor = out_tensor
@@ -198,5 +198,94 @@ class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
     if self.return_columns == 2:
       out_tensor = tf.concat([1-out_tensor, out_tensor], axis=1)
     if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+
+class CoordinatesToDistanceMap(deepchem.models.tensorgraph.layers.Layer):
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: coordinates, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    # Batch_size * n_residues * 3
+    input_features = in_layers[0].out_tensor
+    # Batch_size * n_residues * n_residues
+    flag = tf.cast(in_layers[1].out_tensor, dtype=tf.bool)
+    max_n_res = tf.reduce_max(in_layers[2].out_tensor)
+    
+    tensor1 = tf.tile(tf.expand_dims(input_features, 1), (1, max_n_res, 1, 1))
+    tensor2 = tf.tile(tf.expand_dims(input_features, 2), (1, 1, max_n_res, 1))
+    
+    distances = tf.norm(tensor1 - tensor2, ord=2, axis=3, keepdims=True)
+    out_tensor = tf.boolean_mask(distances, flag)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class Condense(deepchem.models.tensorgraph.layers.Layer):
+
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    input_features = in_layers[0].out_tensor
+    input_features = (input_features + tf.transpose(input_features, perm=[0, 2, 1, 3])) / 2
+    contact_prob = in_layers[1]
+    
+    out_tensor = tf.concat([tf.reduce_max(input_features, axis=2), tf.reduce_sum(input_features * contact_prob, axis=2)], axis=2)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+
+class SpatialAttention(deepchem.models.tensorgraph.layers.Layer):
+  
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    
+    input_features = in_layers[0].out_tensor
+    contact_prob = in_layers[1].out_tensor
+    contact_prob = contact_prob / tf.reduce_sum(contact_prob, axis=2, keepdims=True)
+    n_residues = in_layers[2].out_tensor
+    max_n_res = tf.reduce_max(n_residues)
+    
+    res = tf.reduce_sum(tf.tile(tf.expand_dims(input_features, 1), (1, max_n_res, 1, 1)) * contact_prob, axis=2)
+    
+    out_tensor = tf.concat([input_features, res], axis=2)
+    if set_tensors:
+      self.out_tensor = out_tensor
+    return out_tensor
+  
+class CoordinateScale(deepchem.models.tensorgraph.layers.Layer):
+  
+  def build(self):
+    self.W = tf.Variable(tf.ones((1, 1, 3)), dtype=tf.float32, name='scale_W')
+    self.trainable_weights = [self.W]
+    
+  def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
+    """ parent layers: input_features, input_flag_2D
+    """
+    if in_layers is None:
+      in_layers = self.in_layers
+    in_layers = convert_to_layers(in_layers)
+    self.build()
+    
+    input_features = in_layers[0].out_tensor
+    # Coordinates center
+    input_features = input_features - tf.reduce_sum(input_features, axis=1, keepdims=True)
+    
+    out_tensor = input_features * self.W
+    if set_tensors:
+      self.variables = self.trainable_weights
       self.out_tensor = out_tensor
     return out_tensor

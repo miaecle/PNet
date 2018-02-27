@@ -19,9 +19,9 @@ from pnet.models.layers import BatchNorm, ResidueEmbedding, Conv1DLayer, \
 
 from deepchem.models.tensorgraph.layers import Layer
 from deepchem.models.tensorgraph.layers import convert_to_layers
-from deepchem.nn import activations
-from deepchem.nn import initializations
-from deepchem.nn import model_ops
+from deepchem.models.tensorgraph import activations
+from deepchem.models.tensorgraph import initializations
+from deepchem.models.tensorgraph import model_ops
 
 from pnet.models.conv_net_contact_map import to_one_hot, from_one_hot, ConvNetContactMapBase
 
@@ -480,7 +480,7 @@ class CustomAtrousConvContactMap(ConvNetContactMapBase):
     
     res_flag_2D = self.res_flag_2D
     for i in range(n_pool_layers):
-      for j in range(3):
+      for j in range(4):
         # n_input = 100
         n_input, in_layer = self.CustomRes2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Encoding_Module_'+str(i)+'_Submodule_'+str(j)+'_')
 
@@ -498,10 +498,12 @@ class CustomAtrousConvContactMap(ConvNetContactMapBase):
       self.shortcut_shapes.append(ShapePool(n_filter=n_input, in_layers=[self.shortcut_shapes[-1]], name='global_shape_pool_'+str(i)))
       
 
-    for i in range(2):
+    for i in range(3):
       # n_input = 100
       n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=2, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(i)+'_Rate_'+str(2)+'_')
     n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=4, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(2)+'_Rate_'+str(4)+'_')
+    n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=4, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(2)+'_Rate_'+str(4)+'_')
+    n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=8, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(3)+'_Rate_'+str(8)+'_')
     n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=8, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(3)+'_Rate_'+str(8)+'_')
     n_input, in_layer = self.CustomRes2DAtrousModule_b(n_input, in_layer, rate=16, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Inter_Module_'+str(4)+'_Rate_'+str(16)+'_')
     
@@ -523,7 +525,7 @@ class CustomAtrousConvContactMap(ConvNetContactMapBase):
       
       n_input = n_input * 2
       n_input, in_layer = self.CustomRes2DModule_c(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Decoding_Module_'+str(j)+'_Down_')
-      for i in range(2):
+      for i in range(3):
         # n_input = 100
         n_input, in_layer = self.CustomRes2DModule_b(n_input, in_layer, res_flag_2D=res_flag_2D, size=self.filter_size, name='Res2D_Decoding_Module_'+str(j)+'_Submodule_'+str(i)+'_')
       
