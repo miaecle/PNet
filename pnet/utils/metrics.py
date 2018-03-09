@@ -224,3 +224,61 @@ class top_k_accuracy(object):
     num_samples = len(results)
     scores = np.mean(results, axis=0)
     return scores, num_samples
+
+def dmap_rmse(guess, label, weight):
+  assert guess.shape == label.shape == weight.shape
+  return np.sqrt(np.mean(np.square(guess - label) * weight))
+  
+class CoordinatesMetric(deepchem.metrics.Metric):
+
+  def __init__(self,
+               metric=dmap_rmse,
+               name=None):
+    """
+    Args:
+      metric: customized function that takes args y_true, y_pred, w and
+              computes desired score.
+    """
+    self.metric = metric
+    if name is None:
+      self.name = self.metric.__name__
+    else:
+      self.name = name
+
+  @staticmethod
+  def coordinates_to_dmap(y):
+    assert y.shape[1] == 3
+    dmap = np.linalg.norm(np.expand_dims(y, 1) - np.expand_dims(y, 0), axis=2)
+    return dmap
+    
+  def compute_metric(self,
+                     y_true,
+                     y_pred,
+                     w=None):
+    """Compute metric for coordinate prediction.
+
+    Parameters
+    ----------
+    y_true: list of np.ndarray
+      List of np.ndarray containing true coordinates
+    y_pred: list of np.ndarray
+      List of np.ndarray containing predicted coordinates
+    w: list of np.ndarray, optional
+      An np.ndarray containing weights for each protein
+
+    Returns
+    -------
+    A numpy nd.array containing metric values
+    """
+    if w is None:
+      w = [np.ones((y.shape[0], 1)) for y in y_true]
+    for i in range(len(y_true)):
+      assert y_true[i].shape[0] == y_pred[i].shapep[0] == w[i].shape[0]
+    scores = []
+    for i in range(len(y_true)):
+      n_res = w[i].shape[0]
+      guess = self.coordinates_to_dmap(y_pred[i])
+      label = self.coordinates_to_dmap(y_true[i])
+      weight = np.sign(np.reshape(np.np.expand_dims(w, 1) * np.expand_dims(w, 0), (n_res, n_res)))
+      scores.append(self.metric(guess, label, weight))
+    return np.mean(scores)
