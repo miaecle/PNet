@@ -80,6 +80,8 @@ class Metric(deepchem.metrics.Metric):
       w = [np.ones_like(y_sample) for y_sample in y_true]
     _y = []
     _w = []
+    j = 0
+    values = []
     for i, y_sample in enumerate(y_true):
       sample = self.uppertri(y_sample)
       _y.append(np.stack([sample, np.ones_like(sample)*i], 1))
@@ -99,13 +101,29 @@ class Metric(deepchem.metrics.Metric):
                             self.uppertri(range_long)], 1))
       else:
         _w.append(self.uppertri(w[i]))
-    _y = np.concatenate(_y, 0)
-    _w = np.concatenate(_w, 0)
-    assert _y.shape[0] == y_pred.shape[0] == _w.shape[0]
-
-    metric_value = self.metric(_y, y_pred, _w)
-    print("computed_metrics: %s" % str(metric_value))
-    return metric_value
+      if i%100 == 99:
+        _y = np.concatenate(_y, 0)
+        _w = np.concatenate(_w, 0)
+        _y_pred = y_pred[j:(j+_y.shape[0])]
+        j += _y.shape[0]
+        metric_value, n_samples = self.metric(_y, _y_pred, _w)
+        values.append([metric_value, n_samples])
+        _y = []
+        _w = []
+    if len(_y) > 0:
+      _y = np.concatenate(_y, 0)
+      _w = np.concatenate(_w, 0)
+      _y_pred = y_pred[j:(j+_y.shape[0])]
+      j += _y.shape[0]
+      metric_value, n_samples = self.metric(_y, _y_pred, _w)
+      values.append([metric_value, n_samples])
+      _y = []
+      _w = []
+        
+    total_samples = sum([pair[1] for pair in values])
+    mean_value = np.sum(np.array([pair[0] * pair[1] for pair in values]), axis=0)/float(total_samples)
+    print("computed_metrics: %s" % str(mean_value))
+    return mean_value
 
 def from_one_hot(y, axis=1):
   """Transorms label vector from one-hot encoding.
@@ -121,7 +139,7 @@ def pnet_roc_auc_score(y, y_pred, w):
     y_eval = y_pred[np.nonzero(w[:, i])]
     y_true = np.squeeze(y[np.nonzero(w[:, i]), 0])
     scores.append(roc_auc_score(y_true, y_eval[:, 1]))
-  return scores
+  return scores, 1
 
 def pnet_recall_score(y, y_pred, w):
   scores = []
@@ -129,7 +147,7 @@ def pnet_recall_score(y, y_pred, w):
     y_eval = y_pred[np.nonzero(w[:, i])]
     y_true = np.squeeze(y[np.nonzero(w[:, i]), 0])
     scores.append(recall_score(y_true, from_one_hot(y_eval)))
-  return scores
+  return scores, 1
 
 def pnet_accuracy_score(y, y_pred, w):
   scores = []
@@ -137,7 +155,7 @@ def pnet_accuracy_score(y, y_pred, w):
     y_eval = y_pred[np.nonzero(w[:, i])]
     y_true = np.squeeze(y[np.nonzero(w[:, i]), 0])
     scores.append(accuracy_score(y_true, from_one_hot(y_eval)))
-  return scores
+  return scores, 1
 
 def pnet_precision_score(y, y_pred, w):
   scores = []
@@ -145,7 +163,7 @@ def pnet_precision_score(y, y_pred, w):
     y_eval = y_pred[np.nonzero(w[:, i])]
     y_true = np.squeeze(y[np.nonzero(w[:, i]), 0])
     scores.append(precision_score(y_true, from_one_hot(y_eval)))
-  return scores
+  return scores, 1
 
 def pnet_prc_auc_score(y, y_pred, w):
   scores = []
@@ -154,7 +172,7 @@ def pnet_prc_auc_score(y, y_pred, w):
     y_true = np.squeeze(y[np.nonzero(w[:, i]), 0])
     precision, recall, _ = precision_recall_curve(y_true, y_eval[:, 1])
     scores.append(auc(recall, precision))
-  return scores
+  return scores, 1
 
 class top_k_accuracy(object):
   """ Accuracy of the top L/k predictions, L is the length of protein
@@ -203,5 +221,6 @@ class top_k_accuracy(object):
         else:
           results[i, j] = sum(pred_out * y_true_partition[i])/float(sum(pred_out))
     results = [row for row in results if row[0] >= 0]
+    num_samples = len(results)
     scores = np.mean(results, axis=0)
-    return scores
+    return scores, num_samples

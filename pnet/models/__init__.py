@@ -1,5 +1,6 @@
 import layers
 from conv_net_contact_map import ConvNetContactMapBase, ConvNetContactMap
+from conv_net_3D_structure import ConvNet3DStructureBase, ConvNet3DStructure
 from encode_decode import EncodeDecodeContactMap
 from atrous_conv import AtrousConvContactMap
 from custom_atrous_conv import CustomAtrousConvContactMap

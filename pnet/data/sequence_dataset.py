@@ -74,6 +74,8 @@ class SequenceDataset(object):
     self.twoD_X_on_disk = False
     self.y_on_disk = False
     self.oneD_y_on_disk = False
+    self.contact_prob_built = False
+    self.contact_prob_on_disk = False
 
   def load_structures(self, binary=False, threshold=0.8, weight_base=30., weight_adjust=0.1):
     """
@@ -440,6 +442,11 @@ class SequenceDataset(object):
         result.oneD_y = [self.oneD_y[i] for i in index]
         result.oneD_w = [self.oneD_w[i] for i in index]
       result.oneD_y_built = True
+    if self.contact_prob_built:
+      assert self.contact_prob_on_disk
+      result.contact_prob = self.pick_Xyw(index, self.contact_prob, identifier='contact_prob')
+      result.contact_prob_on_disk = True
+      result.contact_prob_built = True
     return result
 
   def select_by_ID(self, IDs_selection):
@@ -595,6 +602,14 @@ class SequenceDataset(object):
       self.oneD_w = self.load_joblib(path_w)
       self.oneD_y_on_disk = True
 
+  def build_contact_prob(self, path=None):
+    if not path is None:
+      path = os.path.join(path, 'contact_prob/contact_prob')
+      if os.path.exists(path+'0.joblib'):
+        self.contact_prob = self.load_joblib(path)
+        self.contact_prob_built = True
+        self.contact_prob_on_disk = True
+    
   @staticmethod
   def save_joblib(data, path, file_size=1000):
     total_length = len(data)
@@ -619,7 +634,7 @@ class SequenceDataset(object):
 
 
   def iterbatches(self,
-                  contact_prob=False,
+                  use_contact_prob=False,
                   batch_size=None,
                   deterministic=True,
                   pad_batches=False,
@@ -630,7 +645,9 @@ class SequenceDataset(object):
     assert self.twoD_X_built, "Dataset not ready for training, 2D features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
     assert self.oneD_y_built, "Dataset not ready for training, 1D labels must be built"
-    def iterate(dataset, contact_prob, batch_size, deterministic=True, pad_batches=False, on_disk=True):
+    if use_contact_prob:
+      assert self.contact_prob_built
+    def iterate(dataset, use_contact_prob, batch_size, deterministic=True, pad_batches=False, on_disk=True):
       n_samples = dataset.get_num_samples()
       if not deterministic:
         sample_perm = np.random.permutation(n_samples)
@@ -641,10 +658,10 @@ class SequenceDataset(object):
       interval_points = np.arange(np.ceil(float(n_samples) / batch_size) + 1) * batch_size
       interval_points[-1] = n_samples
       if on_disk:
-        current_end = [0, 0, 0, 0, 0, 0]
-        current_start = [0, 0, 0, 0, 0, 0]
-        current_files = [0, 0, 0, 0, 0, 0]
-        file_sizes = [1000, 1000, 500, 500, 500, 500]
+        current_end = [0, 0, 0, 0, 0, 0, 0]
+        current_start = [0, 0, 0, 0, 0, 0, 0]
+        current_files = [0, 0, 0, 0, 0, 0, 0]
+        file_sizes = [1000, 100, 100, 100, 500, 500, 100]
         assert batch_size < min(file_sizes)
         X_all = []
         twoD_X_all = []
@@ -652,12 +669,19 @@ class SequenceDataset(object):
         w_all = []
         oneD_y_all = []
         oneD_w_all = []
+        if use_contact_prob:
+          contact_prob_all = []
         if not deterministic:
-          X, twoD_X, y, w, oneD_y, oneD_w = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path)
+          if use_contact_prob:
+            X, twoD_X, y, w, oneD_y, oneD_w, contact_prob = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path, use_contact_prob=use_contact_prob)
+          else:
+            X, twoD_X, y, w, oneD_y, oneD_w = SequenceDataset.reorder_Xyw(sample_perm, dataset, path=save_path)
           sample_perm = np.arange(n_samples)
           deterministic = True
         else:
           X, twoD_X, y, w, oneD_y, oneD_w = dataset.X, dataset.twoD_X, dataset.y, dataset.w, dataset.oneD_y, dataset.oneD_w
+          if use_contact_prob:
+            contact_prob = dataset.contact_prob
 
       for j in range(len(interval_points) - 1):
         indices = range(int(interval_points[j]), int(interval_points[j + 1]))
@@ -727,6 +751,16 @@ class SequenceDataset(object):
             if len(oneD_w_all) > 2*file_sizes[5]:
               del oneD_w_all[0:file_sizes[5]]
               current_start[5] = current_start[5] + file_sizes[5]
+          # contact_prob
+          if use_contact_prob:
+            while current_end[6] <= index_end:
+              contact_prob_new = pnet.utils.load_from_joblib(contact_prob[current_files[6]])
+              current_files[6] = current_files[6] + 1
+              current_end[6] = current_end[6] + len(contact_prob_new)
+              contact_prob_all.extend(contact_prob_new)
+              if len(contact_prob_all) > 2*file_sizes[6]:
+                del contact_prob_all[0:file_sizes[6]]
+                current_start[6] = current_start[6] + file_sizes[6]
               
           out_X = [X_all[i - current_start[0]] for i in perm_indices]
           out_twoD_X = [twoD_X_all[i - current_start[1]] for i in perm_indices]
@@ -734,16 +768,23 @@ class SequenceDataset(object):
           out_w = [w_all[i - current_start[3]] for i in perm_indices]
           out_oneD_y = [oneD_y_all[i - current_start[4]] for i in perm_indices]
           out_oneD_w = [oneD_w_all[i - current_start[5]] for i in perm_indices]
-
+          if use_contact_prob:
+            out_contact_prob = [contact_prob_all[i - current_start[6]] for i in perm_indices]
+            
         if pad_batches:
-          out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w = dataset.pad_batch(
-              batch_size, dataset.n_features, out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w)
-        yield out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w
+          if not use_contact_prob:
+            out_contact_prob = None
+          out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w, out_contact_prob = dataset.pad_batch(
+              batch_size, dataset.n_features, out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w, out_contact_prob)
+        if use_contact_prob:
+          yield out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w, out_contact_prob
+        else:
+          yield out_X, out_twoD_X, out_y, out_w, out_oneD_y, out_oneD_w
     assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
-    return iterate(self, contact_prob, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
+    return iterate(self, use_contact_prob, batch_size, deterministic, pad_batches, on_disk=self.X_on_disk)
 
   @staticmethod
-  def pad_batch(batch_size, n_features, X, twoD_X, y, w, oneD_y, oneD_w):
+  def pad_batch(batch_size, n_features, X, twoD_X, y, w, oneD_y, oneD_w, contact_prob=None):
     """Pads batch to have size of batch_size
     """
     num_samples = len(X)
@@ -759,11 +800,13 @@ class SequenceDataset(object):
       
       oneD_y.extend([np.zeros((2, 2))] * (batch_size - num_samples))
       oneD_w.extend([np.zeros((2,))] * (batch_size - num_samples))
+      if contact_prob is not None:
+        contact_prob.extend([np.zeros((2, 2))] * (batch_size - num_samples))
     
-    return X, twoD_X, y, w, oneD_y, oneD_w
+    return X, twoD_X, y, w, oneD_y, oneD_w, contact_prob
 
   @staticmethod
-  def reorder_Xyw(sample_perm, dataset, path=None):
+  def reorder_Xyw(sample_perm, dataset, path=None, use_contact_prob=False):
     """ Reordering the X, y, w in the dataset according to sample_perm
     """
     assert dataset.X_on_disk
@@ -776,12 +819,12 @@ class SequenceDataset(object):
                os.path.join(path, 'w'),
                os.path.join(path, 'oneD_y'),
                os.path.join(path, 'oneD_w')]
-    for i, original_paths in enumerate([dataset.X, 
-                                        dataset.twoD_X,
-                                        dataset.y, 
-                                        dataset.w, 
-                                        dataset.oneD_y,
-                                        dataset.oneD_w]):
+      if use_contact_prob:
+        paths.append(os.path.join(path, 'contact_prob'))
+    targets = [dataset.X, dataset.twoD_X, dataset.y, dataset.w, dataset.oneD_y, dataset.oneD_w]
+    if use_contact_prob:
+      targets.append(dataset.contact_prob)
+    for i, original_paths in enumerate(targets):
       index_order = []
       file_size = []
       for orig_path in original_paths:
@@ -791,6 +834,14 @@ class SequenceDataset(object):
       new_order = [index_order[j] for j in sample_perm]
       print("Reordering to %s" % paths[i])
       dataset.save_joblib(new_order, paths[i], file_size=file_size[0])
+    if use_contact_prob:
+      return dataset.load_joblib(paths[0]), \
+             dataset.load_joblib(paths[1]), \
+             dataset.load_joblib(paths[2]), \
+             dataset.load_joblib(paths[3]), \
+             dataset.load_joblib(paths[4]), \
+             dataset.load_joblib(paths[5]), \
+             dataset.load_joblib(paths[6])
     return dataset.load_joblib(paths[0]), \
            dataset.load_joblib(paths[1]), \
            dataset.load_joblib(paths[2]), \
@@ -813,12 +864,12 @@ class SequenceDataset(object):
     self.save_joblib(new_order, path, file_size=file_size[0])
     return self.load_joblib(path)
 
-  def itersamples(self):
+  def itersamples(self, use_contact_prob=False):
     """Object that iterates over the samples in the dataset.
     """
     assert self.X_built, "Dataset not ready for training, features must be built"
     assert self.y_built, "Dataset not ready for training, labels must be built"
-    def sample_iterate(dataset, on_disk=True):
+    def sample_iterate(dataset, use_contact_prob=False, on_disk=True):
       n_samples = dataset.get_num_samples()
       if on_disk:
         current_X = 0
@@ -833,12 +884,17 @@ class SequenceDataset(object):
         current_w_file = 0
         current_oneD_y_file = 0
         current_oneD_w_file = 0
+        if use_contact_prob:
+          current_contact_prob = 0
+          current_contact_prob_file = 0
         X_all = []
         twoD_X_all = []
         y_all = []
         w_all = []
         oneD_y_all = []
         oneD_w_all = []
+        if use_contact_prob:
+          contact_prob_all = []
 
       for i in range(n_samples):
         if not on_disk:
@@ -874,9 +930,17 @@ class SequenceDataset(object):
             current_oneD_w_file = current_oneD_w_file + 1
             current_oneD_w = current_oneD_w + len(oneD_w_new)
             oneD_w_all.extend(oneD_w_new)
-          yield X_all[i], twoD_X_all[i], y_all[i], w_all[i], oneD_y_all[i], oneD_w_all[i]
+          if use_contact_prob:
+            while current_contact_prob <= i:
+              contact_prob_new = pnet.utils.load_from_joblib(self.contact_prob[current_contact_prob_file])
+              current_contact_prob_file = current_contact_prob_file + 1
+              current_contact_prob = current_contact_prob + len(contact_prob_new)
+              contact_prob_all.extend(contact_prob_new)
+            yield X_all[i], twoD_X_all[i], y_all[i], w_all[i], oneD_y_all[i], oneD_w_all[i], contact_prob_all[i]
+          else:
+            yield X_all[i], twoD_X_all[i], y_all[i], w_all[i], oneD_y_all[i], oneD_w_all[i]
     assert self.X_on_disk == self.y_on_disk, 'Only support X, y, w all in memory or in disk'
-    return sample_iterate(self, on_disk=self.X_on_disk)
+    return sample_iterate(self, use_contact_prob=use_contact_prob, on_disk=self.X_on_disk)
 
   def train_valid_test_split(self,
                              deterministic=False,
