@@ -74,6 +74,7 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
       
       n_input, self.conv1d_out_layer = self.Conv1DModule(n_input, in_layer)
 
+      self.add_output(self.conv1d_out_layer)
       n_out, self.cost = self.LossModule(n_input, self.conv1d_out_layer)
       self.set_loss(self.cost)      
       return 
@@ -89,7 +90,6 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
                                                self.coordinate_labels, 
                                                self.coordinate_weights], name='cost_r')
   
-    self.add_output(distance_map)
     return 1, cost
   
   def default_generator(self,
@@ -180,17 +180,19 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
     Evaluates the performance of this model on specified dataset.
     Parameters
     """
-    # TODO: change this
     w_all = []
     y_all = []
-    for _, _, y, w, _, _ in dataset.itersamples():
-      w_all.append(np.sign(w))
-      y_all.append(y)
+    
+    for (_, _, _, _, oneD_y_b, oneD_w_b, _) in dataset.iterbatches(
+        use_contact_prob=True,
+        batch_size=1,
+        deterministic=True,
+        pad_batches=False):
+        y_all.extend(oneD_y_b)
+        w_all.extend(oneD_w_b)
 
     # Retrieve prediction label
     y_pred = self.predict_proba(dataset)
-    if len(y_pred) == 2:
-      y_pred = y_pred[1]
     # Mask all predictions and labels with valid index
     results = {}
     for metric in metrics:
@@ -201,7 +203,9 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
     gen = self.default_generator(dataset)
     y_pred = []
     for feed_dict in gen:
-      y_pred.append(self.session.run(self.outputs[-1], feed_dict=feed_dict))
+      outputs = self.session.run(self.outputs[-1], feed_dict=feed_dict)
+      coordinates = np.cumsum(outputs, axis=1)
+      y_pred.append(np.squeeze(coordinates, axis=0))
     return y_pred
   
 class ConvNet3DStructure(ConvNet3DStructureBase):

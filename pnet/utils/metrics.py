@@ -271,14 +271,14 @@ class CoordinatesMetric(deepchem.metrics.Metric):
     A numpy nd.array containing metric values
     """
     if w is None:
-      w = [np.ones((y.shape[0], 1)) for y in y_true]
+      w = [np.ones((y.shape[0],)) for y in y_true]
     for i in range(len(y_true)):
-      assert y_true[i].shape[0] == y_pred[i].shapep[0] == w[i].shape[0]
+      assert y_true[i].shape[0] == y_pred[i].shape[0] == w[i].shape[0]
     scores = []
     for i in range(len(y_true)):
       n_res = w[i].shape[0]
       guess = self.coordinates_to_dmap(y_pred[i])
       label = self.coordinates_to_dmap(y_true[i])
-      weight = np.sign(np.reshape(np.np.expand_dims(w, 1) * np.expand_dims(w, 0), (n_res, n_res)))
+      weight = np.sign(np.reshape(np.expand_dims(w[i], 1) * np.expand_dims(w[i], 0), (n_res, n_res)))
       scores.append(self.metric(guess, label, weight))
-    return np.mean(scores)
+    return scores
