@@ -24,8 +24,7 @@ from deepchem.models.tensorgraph.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \
     WeightedL2Loss, AddThreshold, SigmoidLoss, Sigmoid, TriangleInequality, \
-    CoordinatesToDistanceMap, Condense, SpatialAttention, CoordinateScale, \
-    NormalizedWeightedL2Loss
+    CoordinatesToDistanceMap, Condense, SpatialAttention, CoordinateScale
 from pnet.utils.amino_acids import AminoAcid_SMILES
 from pnet.models.conv_net_contact_map import ConvNetContactMapBase, to_one_hot, from_one_hot
 
@@ -86,9 +85,9 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
     
     self.coordinate_labels = Label(shape=(None, 1), name='labels_coordinates')    
     self.coordinate_weights = Weights(shape=(None, 1), name='weights')
-    cost = NormalizedWeightedL2Loss(in_layers=[distance_map, 
-                                               self.coordinate_labels, 
-                                               self.coordinate_weights], name='cost_r')
+    cost = WeightedL2Loss(in_layers=[distance_map, 
+                                     self.coordinate_labels, 
+                                     self.coordinate_weights], name='cost_r')
   
     return 1, cost
   
@@ -125,6 +124,7 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
             
             sample_weight = np.pad(oneD_weight, ((0, max_n_res-oneD_weight.shape[0])), 'constant')
             weight_matrix = np.sign(np.expand_dims(sample_weight, 0)) * np.sign(np.expand_dims(sample_weight, 1))
+            np.fill_diagonal(weight_matrix, 0)
             out_weight = np.reshape(weight_matrix, (-1, 1))
             
             oneD_labels.append((out_label*np.sign(out_weight))**2)
@@ -205,7 +205,8 @@ class ConvNet3DStructureBase(ConvNetContactMapBase):
     for feed_dict in gen:
       outputs = self.session.run(self.outputs[-1], feed_dict=feed_dict)
       coordinates = np.cumsum(outputs, axis=1)
-      y_pred.append(np.squeeze(coordinates, axis=0))
+      y_pred.append(coordinates[0])
+    
     return y_pred
   
 class ConvNet3DStructure(ConvNet3DStructureBase):
