@@ -240,7 +240,7 @@ class Condense(deepchem.models.tensorgraph.layers.Layer):
     contact_prob = in_layers[1]
     
     out_tensor = tf.reduce_max(input_features, axis=2)
-    #out_tensor = tf.concat([tf.reduce_max(input_features, axis=2), tf.reduce_sum(input_features * contact_prob, axis=2)], axis=2)
+    out_tensor = tf.concat([tf.reduce_max(input_features, axis=2), tf.reduce_sum(input_features * contact_prob, axis=2)], axis=2)
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor

@@ -233,8 +233,8 @@ class ConvNet3DStructure(ConvNet3DStructureBase):
       # n_input = 64
       n_input, in_layer = self.Res1DModule_b(n_input, in_layer, name='Res1D_Module1_'+str(i)+'_')
     # n_input = 128
-    #in_layer = SpatialAttention(in_layers=[in_layer, self.contact_prob, self.n_residues], name='spatial_attention')
-    #n_input = n_input * 2
+    in_layer = SpatialAttention(in_layers=[in_layer, self.contact_prob, self.n_residues], name='spatial_attention')
+    n_input = n_input * 2
     
     for i in range(5):
       # n_input = 64
@@ -268,5 +268,5 @@ class ConvNet3DStructure(ConvNet3DStructureBase):
   def CondenseModule(self, n_input, in_layer):
     out_layer = Condense(in_layers=[in_layer, self.contact_prob])
     # n_input = 512
-    n_input = n_input# * 2
+    n_input = n_input * 2
     return n_input, out_layer
