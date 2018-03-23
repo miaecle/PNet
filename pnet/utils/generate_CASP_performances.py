@@ -14,7 +14,7 @@ import mdtraj as md
 import numpy as np
 import pandas as pd
 
-dataset = pnet.utils.load_CASP(11)
+dataset = pnet.utils.load_CASP(12)
 
 def _calibrate_resseq(seq, code_start, resseq_start):
   """find the difference in index between sequence and pdb file"""
@@ -38,8 +38,8 @@ for i in range(len(dataset._IDs)):
   if not label_file == label_file:
     top_performances[ID] = np.zeros((3, 0), dtype=object)
     continue
-  os.system('wget http://www.predictioncenter.org/download_area/CASP11/SUMMARY_TABLES/'+ID+'.txt')
-  os.system('wget http://www.predictioncenter.org/download_area/CASP11/predictions/'+ID+'.tar.gz')
+  os.system('wget http://www.predictioncenter.org/download_area/CASP12/SUMMARY_TABLES/'+ID+'.txt')
+  os.system('wget http://www.predictioncenter.org/download_area/CASP12/predictions/'+ID+'.tar.gz')
   if not os.path.exists(ID+'.txt'):
     top_performances[ID] = np.zeros((3, 0), dtype=object)
     continue
@@ -129,5 +129,5 @@ for i in range(len(dataset._IDs)):
   top_performances[ID] = np.stack(top_performances[ID], 0)
 
 os.chdir('/home/zqwu/PNet/examples')
-with open('./CASP11_top.pkl', 'w') as f:
+with open('./CASP12_top.pkl', 'w') as f:
   pickle.dump(top_performances, f)
