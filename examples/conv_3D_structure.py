@@ -13,6 +13,7 @@ import os
 import joblib
 import tensorflow as tf
 
+
 train = pnet.utils.load_PDB50_selected()
 data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50selected')
 train.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_train)
@@ -31,7 +32,7 @@ model_dir = '/home/zqwu/PNet/built_models/Conv3DStructure_PDB50selected'
 model = pnet.models.ConvNet3DStructure(
     n_1D_feat=56,
     n_2D_feat=4,
-    learning_rate=1e-5,
+    learning_rate=1e-3,
     learning_rate_decay=0.99,
     batch_size=batch_size,
     use_queue=False,
@@ -43,7 +44,7 @@ model = pnet.models.ConvNet3DStructure(
 
 
 model.build()
-model.restore()
+#model.restore()
 print("Start Fitting")
 CASP11 = pnet.utils.load_CASP(11)
 CASP11 = CASPALL.select_by_ID(CASP11._IDs)
@@ -53,5 +54,19 @@ metrics = [pnet.utils.metrics.CoordinatesMetric()]
 for i in range(20):
   model.fit(train, nb_epoch=1, checkpoint_interval=11498)
 
-  print(model.evaluate(CASP11, metrics))
-  print(model.evaluate(CASP12, metrics))
+  raw_performances = np.array(model.evaluate(CASP11, metrics)['dmap_rmse'])
+  CASP11_performances = []
+  for ind, ID in enumerate(CASP11._IDs):
+    if ID in pnet.utils.CASP11_valid_IDs:
+      CASP11_performances.append(raw_performances[ind])  
+  assert 0 not in CASP11_performances
+  print('CASP11: ' + str(np.mean(CASP11_performances)))
+  
+  
+  raw_performances = np.array(model.evaluate(CASP12, metrics)['dmap_rmse'])
+  CASP12_performances = []
+  for ind, ID in enumerate(CASP12._IDs):
+    if ID in pnet.utils.CASP12_valid_IDs:
+      CASP12_performances.append(raw_performances[ind])  
+  assert 0 not in CASP12_performances
+  print('CASP12: ' + str(np.mean(CASP12_performances)))
