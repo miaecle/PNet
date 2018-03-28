@@ -87,7 +87,14 @@ def load_PDB50_selected(load_pdb=False):
   path = os.path.join(datasets_path, 'PDB50selected')
   path = os.path.join(path, 'pdb50selected.csv')
   return load_sequence(path, load_pdb=load_pdb)
-  
+
+def load_CAMEO(load_pdb=False):
+  """ Load all samples from PDB50 subset """
+  datasets_path = os.environ['PNET_DATA_DIR']
+  path = os.path.join(datasets_path, 'CAMEO')
+  path = os.path.join(path, 'cameo_targets.csv')
+  return load_sequence(path, load_pdb=load_pdb)
+
 def load_sample(ID, load_pdb=False):
   """ Load sample with specific ID """
   if not ID.__class__ is list:
