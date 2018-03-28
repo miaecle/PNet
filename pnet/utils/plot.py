@@ -33,7 +33,7 @@ def plot_sample(model, sample, path):
     j += n_res*(n_res+1)/2
     i += 1
 
-def plot(matrix, path, title="RR_contact"):
+def plot(matrix, path, title="RR_contact", zero_white=False, xlim=None, ylim=None):
   plt.clf()
   fig, ax = plt.subplots()
   if len(np.unique(matrix)) == 2:
@@ -43,12 +43,20 @@ def plot(matrix, path, title="RR_contact"):
   if binary:
     cmap = matplotlib.cm.get_cmap('binary')
   else:
-    cmap = matplotlib.cm.get_cmap('viridis')
+    cmap = matplotlib.cm.get_cmap('BuPu')
     cmap.set_under('w')
-  cax = ax.imshow(matrix, cmap=cmap, vmin=.001)
+  if zero_white:
+    vmin = 1e-5
+  else:
+    vmin = 0
+  cax = ax.imshow(matrix, cmap=cmap, vmin=vmin, vmax = 2)
   ax.set_title(title)
   ax.set_xlabel("Amino Acid Index")
   ax.set_ylabel("Amino Acid Index")
+  if not xlim is None:
+    ax.set_xlim(xlim[0], xlim[1])
+  if not ylim is None:
+    ax.set_ylim(ylim[0], ylim[1])
   if not binary:
     fig.colorbar(cax, cmap = matplotlib.cm.get_cmap(cmap))
   plt.savefig(path, dpi=300)
