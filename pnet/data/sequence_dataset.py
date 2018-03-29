@@ -479,7 +479,6 @@ class SequenceDataset(object):
 
   def build_features(self, feat_list, file_size=1000, reload=True, path=None):
     """ Build X based on specified list of features """
-    self.build_2D_features(reload=reload, path=path)
     if not path is None:
       path = os.path.join(path, '_'.join(feat_list))
       if not os.path.exists(path):

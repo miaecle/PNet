@@ -13,12 +13,20 @@ import os
 train = pnet.utils.load_PDB50_selected()
 data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50selected')
 train.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_train)
+train.build_2D_features(feat_list=['CCMpred', 'MI_MCP'], path=data_dir_train)
 train.build_labels(path=data_dir_train, weight_base=50., weight_adjust=0.1, binary=True)
 
 CASPALL = pnet.utils.load_CASP_all()
 data_dir_valid = os.path.join(os.environ['PNET_DATA_DIR'], 'CASPALL')
 CASPALL.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_valid)
+CASPALL.build_2D_features(feat_list=['CCMpred', 'MI_MCP'], path=data_dir_valid)
 CASPALL.build_labels(path=data_dir_valid, weight_base=50., weight_adjust=0.1, binary=True)
+
+CAMEO = pnet.utils.load_CAMEO()
+data_dir_cameo = os.path.join(os.environ['PNET_DATA_DIR'], 'CAMEO')
+CAMEO.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_cameo)
+CAMEO.build_2D_features(feat_list=['CCMpred', 'MI_MCP'], path=data_dir_cameo)
+CAMEO.build_labels(path=data_dir_cameo, weight_base=50., weight_adjust=0.1, binary=True)
 
 CASP11 = pnet.utils.load_CASP(11)
 CASP11 = CASPALL.select_by_ID(CASP11._IDs)
@@ -49,5 +57,7 @@ model.restore(os.path.join(model_dir, 'model-1'))
 
 print(model.evaluate(CASP11, metrics))
 print(model.evaluate(CASP12, metrics))
+print(model.evaluate(CAMEO, metrics))
 print(model.evaluate(CASP11, metrics2))
 print(model.evaluate(CASP12, metrics2))
+print(model.evaluate(CAMEO, metrics2))
