@@ -11,16 +11,16 @@ import pickle
 import time
 import threading
 
-import deepchem as dc
 from rdkit import Chem
+from deepchem.feat import ConvMolFeaturizer
 from deepchem.feat.mol_graphs import ConvMol
-from deepchem.models.tensorgraph.tensor_graph import TensorGraph
-from deepchem.models.tensorgraph.layers import Input, Dense, \
+from pnet.utils.tg_copy.tensor_graph import TensorGraph
+from pnet.utils.tg_copy.layers import Input, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature, TensorWrapper, GraphConv, GraphPool, GraphGather, Add, \
     Reshape, Squeeze
     
-from deepchem.models.tensorgraph.optimizers import Adam
+from pnet.utils.tg_copy.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \
     WeightedL2Loss, AddThreshold, SigmoidLoss, Sigmoid, TriangleInequality
@@ -345,7 +345,7 @@ class ConvNetContactMapBase(TensorGraph):
     if name == None:
       name = 'AAEmbedding_'+str(self.module_count)+'_'
       self.module_count += 1
-    feat = dc.feat.ConvMolFeaturizer()
+    feat = ConvMolFeaturizer()
     featurized_AA = [feat._featurize(Chem.MolFromSmiles(smile)) for smile in AminoAcid_SMILES]
     multiConvMol = ConvMol.agglomerate_mols(featurized_AA, max_deg=3)
     atom_features = TensorWrapper(tf.constant(multiConvMol.get_atom_features(), dtype=tf.float32), name=name+'atom_features')

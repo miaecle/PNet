@@ -8,8 +8,8 @@ Created on Thu Aug 24 17:07:15 2017
 
 import numpy as np
 import tensorflow as tf
-from deepchem.models.tensorgraph.tensor_graph import TensorGraph
-from deepchem.models.tensorgraph.layers import Input, Dense, Squeeze, \
+from pnet.utils.tg_copy.tensor_graph import TensorGraph
+from pnet.utils.tg_copy.layers import Input, Dense, Squeeze, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature
 from pnet.models.layers import BatchNorm, ResidueEmbedding, Conv1DLayer, \
@@ -17,11 +17,11 @@ from pnet.models.layers import BatchNorm, ResidueEmbedding, Conv1DLayer, \
     Conv2DUp, Expand_dim, ShapePool, ToShape, Conv1DAtrous, Conv2DAtrous, \
     Conv2DASPP
 
-from deepchem.models.tensorgraph.layers import Layer
-from deepchem.models.tensorgraph.layers import convert_to_layers
-from deepchem.models.tensorgraph import activations
-from deepchem.models.tensorgraph import initializations
-from deepchem.models.tensorgraph import model_ops
+from pnet.utils.tg_copy.layers import Layer
+from pnet.utils.tg_copy.layers import convert_to_layers
+from pnet.utils.tg_copy import activations
+from pnet.utils.tg_copy import initializations
+from pnet.utils.tg_copy import model_ops
 
 from pnet.models.conv_net_contact_map import to_one_hot, from_one_hot, ConvNetContactMapBase
 

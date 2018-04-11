@@ -10,7 +10,6 @@ from __future__ import division
 from __future__ import unicode_literals
 
 import numpy as np
-import deepchem
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import accuracy_score
@@ -21,7 +20,7 @@ from sklearn.metrics import precision_score
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import auc
 
-class Metric(deepchem.metrics.Metric):
+class Metric(object):
 
   def __init__(self,
                metric,
@@ -229,7 +228,7 @@ def dmap_rmse(guess, label, weight):
   assert guess.shape == label.shape == weight.shape
   return np.sqrt(np.mean(np.square(guess - label) * weight))
   
-class CoordinatesMetric(deepchem.metrics.Metric):
+class CoordinatesMetric(object):
 
   def __init__(self,
                metric=dmap_rmse,

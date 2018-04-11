@@ -11,12 +11,13 @@ from __future__ import unicode_literals
 
 import numpy as np
 import tensorflow as tf
-from deepchem.models.tensorgraph import activations
-from deepchem.models.tensorgraph import initializations
-from deepchem.models.tensorgraph import model_ops
 
-from deepchem.models.tensorgraph.layers import Layer
-from deepchem.models.tensorgraph.layers import convert_to_layers
+from pnet.utils.tg_copy import activations
+from pnet.utils.tg_copy import initializations
+from pnet.utils.tg_copy import model_ops
+
+from pnet.utils.tg_copy.layers import Layer
+from pnet.utils.tg_copy.layers import convert_to_layers
 
 class DiagConv2DLayer(Layer):
 

@@ -8,8 +8,8 @@ Created on Thu Aug 24 17:07:15 2017
 
 import numpy as np
 import tensorflow as tf
-from deepchem.models.tensorgraph.tensor_graph import TensorGraph
-from deepchem.models.tensorgraph.layers import Input, Dense, Squeeze, \
+from pnet.utils.tg_copy.tensor_graph import TensorGraph
+from pnet.utils.tg_copy.layers import Input, Dense, Squeeze, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature
 from pnet.models.layers import BatchNorm, ResidueEmbedding, Conv1DLayer, \

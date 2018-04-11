@@ -4,4 +4,4 @@ from conv_net_3D_structure import ConvNet3DStructureBase, ConvNet3DStructure
 from encode_decode import EncodeDecodeContactMap
 from atrous_conv import AtrousConvContactMap
 from custom_atrous_conv import CustomAtrousConvContactMap
-from raptorx_copy import RaptorX_structure
+from vanilla_conv import VanillaConvContactMap

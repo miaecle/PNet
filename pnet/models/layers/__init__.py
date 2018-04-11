@@ -3,12 +3,11 @@ from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm, \
     TriangleInequality, Conv1DLayer_RaptorX, Conv2DLayer_RaptorX
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
-import deepchem
-from deepchem.models.tensorgraph.layers import convert_to_layers
+from pnet.utils.tg_copy.layers import Layer, convert_to_layers
 import tensorflow as tf
 import numpy as np
 
-class Expand_dim(deepchem.models.tensorgraph.layers.Layer):
+class Expand_dim(Layer):
 
   def __init__(self, dim=None, **kwargs):
     self.dim = dim
@@ -22,7 +21,7 @@ class Expand_dim(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class ToShape(deepchem.models.tensorgraph.layers.Layer):
+class ToShape(Layer):
 
   def __init__(self, n_filter, batch_size, **kwargs):
     self.n_filter = n_filter
@@ -38,7 +37,7 @@ class ToShape(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class ShapePool(deepchem.models.tensorgraph.layers.Layer):
+class ShapePool(Layer):
 
   def __init__(self, n_filter=None, padding='SAME', **kwargs):
     self.n_filter = n_filter
@@ -68,7 +67,7 @@ class ShapePool(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class AminoAcidEmbedding(deepchem.models.tensorgraph.layers.Layer):
+class AminoAcidEmbedding(Layer):
 
   def __init__(self,
                pos_start=0,
@@ -101,7 +100,7 @@ class AminoAcidEmbedding(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
   
-class AminoAcidPad(deepchem.models.tensorgraph.layers.Layer):
+class AminoAcidPad(Layer):
 
   def __init__(self,
                embedding_length,
@@ -123,7 +122,7 @@ class AminoAcidPad(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class WeightedL2Loss(deepchem.models.tensorgraph.layers.Layer):
+class WeightedL2Loss(Layer):
 
   def __init__(self, in_layers=None, **kwargs):
     super(WeightedL2Loss, self).__init__(in_layers, **kwargs)
@@ -142,7 +141,7 @@ class WeightedL2Loss(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
   
-class AddThreshold(deepchem.models.tensorgraph.layers.Layer):
+class AddThreshold(Layer):
 
   def __init__(self, in_layers=None, **kwargs):
     super(AddThreshold, self).__init__(in_layers, **kwargs)
@@ -163,7 +162,7 @@ class AddThreshold(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
   
-class SigmoidLoss(deepchem.models.tensorgraph.layers.Layer):
+class SigmoidLoss(Layer):
 
   def __init__(self, in_layers=None, **kwargs):
     super(SigmoidLoss, self).__init__(in_layers, **kwargs)
@@ -181,7 +180,7 @@ class SigmoidLoss(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
+class Sigmoid(Layer):
 
   def __init__(self, in_layers=None, return_columns=1, **kwargs):
     self.return_columns = return_columns
@@ -202,7 +201,7 @@ class Sigmoid(deepchem.models.tensorgraph.layers.Layer):
     return out_tensor
 
 
-class CoordinatesToDistanceMap(deepchem.models.tensorgraph.layers.Layer):
+class CoordinatesToDistanceMap(Layer):
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: coordinates, input_flag_2D
@@ -226,7 +225,7 @@ class CoordinatesToDistanceMap(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class Condense(deepchem.models.tensorgraph.layers.Layer):
+class Condense(Layer):
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: input_features, input_flag_2D
@@ -245,7 +244,7 @@ class Condense(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
 
-class SpatialAttention(deepchem.models.tensorgraph.layers.Layer):
+class SpatialAttention(Layer):
   
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
     """ parent layers: input_features, input_flag_2D
@@ -267,7 +266,7 @@ class SpatialAttention(deepchem.models.tensorgraph.layers.Layer):
       self.out_tensor = out_tensor
     return out_tensor
   
-class CoordinateScale(deepchem.models.tensorgraph.layers.Layer):
+class CoordinateScale(Layer):
   
   def build(self):
     self.W = tf.Variable(tf.ones((1, 1, 3))*0.5, dtype=tf.float32, name='scale_W')
