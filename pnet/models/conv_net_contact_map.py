@@ -14,13 +14,13 @@ import threading
 from rdkit import Chem
 from deepchem.feat import ConvMolFeaturizer
 from deepchem.feat.mol_graphs import ConvMol
-from pnet.utils.tg_copy.tensor_graph import TensorGraph
-from pnet.utils.tg_copy.layers import Input, Dense, \
+from deepchem.models.tensorgraph.tensor_graph import TensorGraph
+from deepchem.models.tensorgraph.layers import Input, Dense, \
     SoftMax, SoftMaxCrossEntropy, L2Loss, Concat, WeightedError, Label, \
     Weights, Feature, TensorWrapper, GraphConv, GraphPool, GraphGather, Add, \
     Reshape, Squeeze
     
-from pnet.utils.tg_copy.optimizers import Adam
+from deepchem.models.tensorgraph.optimizers import Adam
 from pnet.models.layers import BatchNorm, AminoAcidEmbedding, AminoAcidPad, \
     Conv1DLayer, Conv2DLayer, Outer1DTo2DLayer, ContactMapGather, ResAdd, \
     WeightedL2Loss, AddThreshold, SigmoidLoss, Sigmoid, TriangleInequality

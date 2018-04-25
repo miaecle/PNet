@@ -3,7 +3,7 @@ from conv_layers import ResidueEmbedding, Conv1DLayer, Conv2DLayer, \
     Conv1DAtrous, Conv2DAtrous, Conv2DBilinearUp, Conv2DASPP, BatchNorm, \
     TriangleInequality, Conv1DLayer_RaptorX, Conv2DLayer_RaptorX
 from diag_conv_layers import DiagConv2DAtrous, DiagConv2DLayer, DiagConv2DASPP
-from pnet.utils.tg_copy.layers import Layer, convert_to_layers
+from deepchem.models.tensorgraph.layers import Layer, convert_to_layers
 import tensorflow as tf
 import numpy as np
 
@@ -204,11 +204,10 @@ class Sigmoid(Layer):
 class CoordinatesToDistanceMap(Layer):
 
   def create_tensor(self, in_layers=None, set_tensors=True, **kwargs):
-    """ parent layers: coordinates, input_flag_2D
+    """ parent layers: coordinates, n_residues
     """
     if in_layers is None:
       in_layers = self.in_layers
-    in_layers = convert_to_layers(in_layers)
     
     # Batch_size * n_residues * 3
     input_features = in_layers[0].out_tensor
@@ -218,9 +217,9 @@ class CoordinatesToDistanceMap(Layer):
     tensor1 = tf.tile(tf.expand_dims(coordinates, 1), (1, max_n_res, 1, 1))
     tensor2 = tf.tile(tf.expand_dims(coordinates, 2), (1, 1, max_n_res, 1))
     
-    dis_map = tf.reduce_sum(tf.square(tensor1 - tensor2), axis=-1)
+    dis_map = tf.reduce_sum(tf.square(tensor1 - tensor2), axis=-1, keepdims=True)
     
-    out_tensor = tf.reshape(dis_map, (-1, 1))
+    out_tensor = dis_map
     if set_tensors:
       self.out_tensor = out_tensor
     return out_tensor
@@ -232,7 +231,6 @@ class Condense(Layer):
     """
     if in_layers is None:
       in_layers = self.in_layers
-    in_layers = convert_to_layers(in_layers)
     
     input_features = in_layers[0].out_tensor
     input_features = (input_features + tf.transpose(input_features, perm=[0, 2, 1, 3])) / 2
@@ -251,7 +249,6 @@ class SpatialAttention(Layer):
     """
     if in_layers is None:
       in_layers = self.in_layers
-    in_layers = convert_to_layers(in_layers)
     
     input_features = in_layers[0].out_tensor
     contact_prob = in_layers[1].out_tensor
@@ -278,7 +275,6 @@ class CoordinateScale(Layer):
     """
     if in_layers is None:
       in_layers = self.in_layers
-    in_layers = convert_to_layers(in_layers)
     self.build()
     
     input_features = in_layers[0].out_tensor
