@@ -201,7 +201,7 @@ class ContactMapToCoordGAN(GAN):
         
     in_layer = Concat(in_layers=[out_layer, coords], axis=2)
     
-    out_layer = Conv1DLayer(
+    in_layer = Conv1DLayer(
         n_input_feat=8+3,
         n_output_feat=16,
         n_size=1,
@@ -212,7 +212,7 @@ class ContactMapToCoordGAN(GAN):
       # n_input = 16
       n_input, in_layer = self.Res1DModule_b(n_input, in_layer, name='dis_Res1D_Module1_'+str(i)+'_')
     scores = Dense(1, in_layers=[in_layer], name='dis_score_1D')
-    final_score = ReduceMean(in_layers=[scores], axis=(1))
+    final_score = ReduceMean(in_layers=[scores], axis=(1,), name='dis_final_score_1D')
     return final_score
 
   def dis_diff_2D(self, dis_map, contact_prob):
@@ -230,7 +230,7 @@ class ContactMapToCoordGAN(GAN):
       # n_input = 16
       n_input, in_layer = self.Res2DModule_b(n_input, in_layer, name='dis_Res1D_Module2_'+str(i)+'_')
     scores = Dense(1, in_layers=[in_layer], name='dis_score_2D')
-    final_score = ReduceMean(in_layers=[scores], axis=(1, 2))
+    final_score = ReduceMean(in_layers=[scores], axis=(1, 2), name='dis_final_score_2D')
     return final_score
   
     
