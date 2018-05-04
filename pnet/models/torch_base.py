@@ -9,7 +9,7 @@ import torch
 import time
 import numpy as np
 import itertools
-from pnet.utils.tg_copy.models import Model
+from deepchem.models.models import Model
 
 class TorchModel(Model):
 
