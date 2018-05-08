@@ -41,7 +41,7 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload
           seq.append(AminoAcid[res.upper()])
         except:
           # Unknown Amino Acid
-          seq.append(22)
+          seq.append(None)
       sequences.append(seq)
   with open(msa_path, 'r') as f:
     for first_record in Bio.SeqIO.parse(f, 'fasta'):
