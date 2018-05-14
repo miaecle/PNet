@@ -50,14 +50,13 @@ def MI_MCP(dataset):
   
   g = tf.Graph()
   with g.as_default():
-    n_res = tf.placeholder(tf.int32, shape=())
     inputs = tf.placeholder(tf.int32, shape=(None, None)) # n_alignments * length
     count_1D = tf.one_hot(inputs, 21, axis=-1)
     ct_1D = tf.reduce_sum(count_1D, axis=0)
 
-    tensor_1 = tf.tile(tf.expand_dims(tf.expand_dims(count_1D, axis=1), axis=3), (1, n_res, 1, 21, 1))
-    tensor_2 = tf.tile(tf.expand_dims(tf.expand_dims(count_1D, axis=2), axis=4), (1, 1, n_res, 1, 21))
-    ct_2D = tf.reduce_sum(tensor_1*tensor_2, axis=0)
+    tensor_1 = tf.expand_dims(inputs, axis=1)
+    tensor_2 = tf.expand_dims(inputs, axis=2)
+    ct_2D = tf.reduce_sum(tf.one_hot(tensor_1*21 + tensor_2, 441, axis=-1), axis=0)
     sess = tf.Session(graph=g)
   
   out = []
@@ -80,11 +79,11 @@ def MI_MCP(dataset):
         sequences = np.array(sequences)[:, index]
       
         num_res = len(index)
-        feed_dict = {n_res: num_res}
+        feed_dict = {}
         out_ct_1D = np.zeros((num_res, 21))
-        out_ct_2D = np.zeros((num_res, num_res, 21, 21))
+        out_ct_2D = np.zeros((num_res, num_res, 441))
         
-        batch_size = int(5*(700/num_res)**2)
+        batch_size = int(5*(1000/num_res)**2)
         n_batch = sequences.shape[0]//batch_size+1
         print(dataset._IDs[i] +': ' + str(num_res) + ', ' + str(sequences.shape[0]))
         for j in range(n_batch):
@@ -95,7 +94,7 @@ def MI_MCP(dataset):
           out_ct_1D += sess.run(ct_1D, feed_dict=feed_dict)
           out_ct_2D += sess.run(ct_2D, feed_dict=feed_dict)
         freq_1D = out_ct_1D/sequences.shape[0]
-        freq_2D = np.reshape(out_ct_2D, (num_res, num_res, 21*21))/sequences.shape[0]
+        freq_2D = out_ct_2D/sequences.shape[0]
         
         MI = mutual_information(freq_1D, freq_2D)
         MCP = mean_contact_potential(freq_1D, freq_2D)

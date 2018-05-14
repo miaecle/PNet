@@ -33,7 +33,17 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload
                       num_iterations=num_iterations,
                       reload=reload)
   with open(msa_path, 'r') as f:
-    sequences = [[AminoAcid[res.upper()] for res in record.seq.tostring()] for record in Bio.SeqIO.parse(f, 'fasta')]
+    sequences = []
+    for record in Bio.SeqIO.parse(f, 'fasta'):
+      seq = []
+      for res in record.seq.tostring():
+        try:
+          seq.append(AminoAcid[res.upper()])
+        except:
+          # Unknown Amino Acid
+          seq.append(None)
+      sequences.append(seq)
+
   with open(msa_path, 'r') as f:
     for first_record in Bio.SeqIO.parse(f, 'fasta'):
       break
@@ -42,7 +52,7 @@ def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload
   sequences = np.transpose(np.array(sequences))[index, :]
   def to_one_hot(res):
     result = np.zeros((25))
-    if res > 0:
+    if res >= 0:
       result[int(res)] = 1
     return result
   sequences_one_hot = [[to_one_hot(sequence[i]) for i in range(len(sequence))] for sequence in sequences]
