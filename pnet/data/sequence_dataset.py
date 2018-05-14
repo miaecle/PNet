@@ -686,12 +686,12 @@ class SequenceDataset(object):
         indices = range(int(interval_points[j]), int(interval_points[j + 1]))
         perm_indices = sample_perm[indices]
         if not on_disk:
-          out_X = [X[i] for i in perm_indices]
-          out_twoD_X = [twoD_X[i] for i in perm_indices]
-          out_y = [y[i] for i in perm_indices]
-          out_w = [w[i] for i in perm_indices]
-          out_oneD_y = [oneD_y[i] for i in perm_indices]
-          out_oneD_w = [oneD_w[i] for i in perm_indices]
+          out_X = [dataset.X[i] for i in perm_indices]
+          out_twoD_X = [dataset.twoD_X[i] for i in perm_indices]
+          out_y = [dataset.y[i] for i in perm_indices]
+          out_w = [dataset.w[i] for i in perm_indices]
+          out_oneD_y = [dataset.oneD_y[i] for i in perm_indices]
+          out_oneD_w = [dataset.oneD_w[i] for i in perm_indices]
           
         else:
           assert deterministic, 'Only support index order'
