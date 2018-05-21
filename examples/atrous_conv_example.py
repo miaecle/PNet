@@ -10,8 +10,8 @@ import numpy as np
 import pnet
 import os
 
-train = pnet.utils.load_PDB50_selected()
-data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50selected')
+train = pnet.utils.load_PDB50_cut()
+data_dir_train = os.path.join(os.environ['PNET_DATA_DIR'], 'PDB50cut')
 train.build_features(['raw', 'MSA', 'SS', 'SA'], path=data_dir_train)
 train.build_2D_features(feat_list=['CCMpred', 'MI_MCP'], path=data_dir_train)
 train.build_labels(path=data_dir_train, weight_base=50., weight_adjust=0.1, binary=True)
