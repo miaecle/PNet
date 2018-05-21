@@ -4,6 +4,15 @@
 Created on Tue Jun 27 19:43:49 2017
 
 @author: zqwu
+
+Example script using saved encoder-decoder model to predict targets in CASP11, CASP12, CAMEO.
+
+To run this code, please download the feature files(or generating features by HHblits, CCMpred and RaptorX):
+  CASP: https://s3-us-west-1.amazonaws.com/deepchem.io/featurized_datasets/CASPALL.tar.gz
+  CAMEO: https://s3-us-west-1.amazonaws.com/deepchem.io/featurized_datasets/CAMEO.tar.gz
+  PDB50cut: https://s3-us-west-1.amazonaws.com/deepchem.io/featurized_datasets/PDB50cut.tar.gz
+Please decompress into the datasets folder, as defined by the environmental variable: PNET_DATA_DIR
+
 """
 import deepchem as dc
 import numpy as np
