@@ -59,7 +59,7 @@ AminoAcid_Entropy = {
 
 AminoAcid_SMILES = [
     'O=C(O)C(N)C',
-    'O=C(O)C(N)CCC/N=C(\N)N',
+    'NC(CCCNC(N)=N)C(O)=O',
     'O=C(N)C[C@H](N)C(=O)O',
     'O=C(O)CC(N)C(=O)O',
     'C([C@@H](C(=O)O)N)S',
