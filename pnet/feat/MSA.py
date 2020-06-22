@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import csv
 import Bio.SeqIO
+from shutil import copyfile
 from pnet.utils import blastp_local, psiblast_local, hhblits_local
 from pnet.utils.amino_acids import AminoAcid
 
@@ -28,7 +29,8 @@ def to_one_hot(y, n_classes=25):
 
 def generate_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload=True):
   """ Load multiple sequence alignment features(position frequency matrix) """
-  msa_path = form_msa(dataset, mode=mode,
+  msa_path = form_msa(dataset, 
+                      mode=mode,
                       evalue=evalue,
                       num_iterations=num_iterations,
                       reload=reload)
@@ -69,14 +71,17 @@ def form_msa(dataset, mode="hhblits", evalue=0.001, num_iterations=3, reload=Tru
   assert len(dataset.sequences) == 1, "Only support one sample"
   # Support psiblast, blastp
   data_dir = os.environ['PNET_DATA_DIR']
-  msa_file = os.path.join(data_dir, 'MSA_ALL/'+dataset.IDs[0]+'.fas')
+  msa_file = os.path.join(data_dir, 'MSA/'+dataset.IDs[0]+'.fas')
   if os.path.exists(msa_file) and reload:
     return msa_file
-  if mode == "psiblast":
-    path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
-  elif mode == "blastp":
-    path, e = blastp_local(dataset, evalue=evalue)
-  elif mode == "hhblits":
-    _, path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
-    e = None
+  # if mode == "psiblast":
+  #   path, e = psiblast_local(dataset, evalue=evalue, num_iterations=num_iterations)
+  # elif mode == "blastp":
+  #   path, e = blastp_local(dataset, evalue=evalue)
+  if mode == "hhblits":
+    path = hhblits_local(dataset, evalue=evalue, num_iterations=num_iterations)
+  else:
+    raise ValueError("mode not recognized")
+  if reload:
+    copyfile(path, msa_file)
   return path
