@@ -91,8 +91,8 @@ cath_seqs = pickle.load(open(os.path.join(os.environ['PNET_DATA_DIR'],
 
 af_train = {}
 with open(os.path.join(os.environ['PNET_DATA_DIR'],
-                                'CATH',
-                                'train_domains.txt', 'r') as f:
+                       'CATH',
+                       'af_train_domains.txt'), 'r') as f:
   for line in f:
     k = line.strip()
     if k in cath_entries:
@@ -104,8 +104,8 @@ with open(os.path.join(os.environ['PNET_DATA_DIR'],
 
 af_test = {}
 with open(os.path.join(os.environ['PNET_DATA_DIR'],
-                                'CATH',
-                                'test_domains.txt', 'r') as f:
+                       'CATH',
+                       'af_test_domains.txt'), 'r') as f:
   for line in f:
     k = line.strip()
     if k in cath_entries:
@@ -155,11 +155,11 @@ for k in mapping:
 assembled_train_samples = sorted(assembled_train_samples, key=lambda x: x[0])
 assembled_test_samples = sorted(assembled_test_samples, key=lambda x: x[0])
 
-with open(os.path.join(os.environ['PNET_DATA_DIR'], 'CATH_selected.csv'), 'w') as f:
+with open(os.path.join(os.environ['PNET_DATA_DIR'], 'CATH', 'CATH_selected.csv'), 'w') as f:
   writer = csv.writer(f)
-  writer.writerow(['DomainID', 'Sequence', 'Split'])
+  writer.writerow(['ID', 'pdb', 'sequence', 'split'])
   for pair in assembled_train_samples:
-    writer.writerow([pair[0], pair[1], 0])
+    writer.writerow([pair[0], pair[0][:4], pair[1], 0])
   for pair in assembled_test_samples:
-    writer.writerow([pair[0], pair[1], 1])
+    writer.writerow([pair[0], pair[0][:4], pair[1], 1])
 
