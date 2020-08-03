@@ -64,18 +64,18 @@ def load_CASP(number, raw=False, load_pdb=False):
     path = os.path.join(path, 'casp' + str(int(number)) + '_seq.csv')
     return load_sequence(path, load_pdb=load_pdb)
 
+def load_CASP_all(raw=False, load_pdb=False):
+  """ Load all prepared CASP samples (5~12) """
+  CASP_series = [5, 6, 7, 8, 9, 10, 11, 12]
+  datasets = [load_CASP(i, raw=raw, load_pdb=load_pdb) for i in CASP_series]
+  return merge_datasets(datasets)
+
 def load_CATH(load_pdb=False):
   """ Load all samples from CATH selected subset (alphafold) """
   datasets_path = os.environ['PNET_DATA_DIR']
   path = os.path.join(datasets_path, 'CATH')
   path = os.path.join(path, 'CATH_selected.csv')
   return load_sequence(path, load_pdb=load_pdb)
-
-def load_CASP_all(raw=False, load_pdb=False):
-  """ Load all prepared CASP samples (5~12) """
-  CASP_series = [5, 6, 7, 8, 9, 10, 11, 12]
-  datasets = [load_CASP(i, raw=raw, load_pdb=load_pdb) for i in CASP_series]
-  return merge_datasets(datasets)
 
 def load_PDB50(raw=False, load_pdb=False):
   """ Load all samples from PDB50 subset """
